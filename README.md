@@ -5,12 +5,12 @@
 run these commands :
 
 # kalo mac
-python3 -m venv .venv
-source .venv/bin/activate
+- python3 -m venv .venv
+- source .venv/bin/activate
 
 # kalo Windows
-py -3 -m venv .venv
-.venv\scripts\activate
+- py -3 -m venv .venv
+- .venv\scripts\activate
 
 # terakhir
 type these "python -m pip install --upgrade pip"
