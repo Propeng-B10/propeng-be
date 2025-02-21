@@ -9,8 +9,13 @@ https://docs.djangoproject.com/en/5.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
-
 from pathlib import Path
+import user
+import nilai
+import accountmanage
+import evalguru
+import absensi
+import matapelajaran
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,6 +29,7 @@ SECRET_KEY = 'django-insecure-9v1p%@j)xl2d3%g(vr4hrfa0$_rbnchntb!4guwg%r#-l8gwt*
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
+AUTH_USER_MODEL = 'user.User'
 
 ALLOWED_HOSTS = []
 
@@ -37,6 +43,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'user',
+    'evalguru',
+    'nilai',
+    'matapelajaran',
+    'accountmanage',
+    'absensi'
 ]
 
 MIDDLEWARE = [
