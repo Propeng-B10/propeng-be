@@ -33,6 +33,23 @@ AUTH_USER_MODEL = 'user.User'
 
 ALLOWED_HOSTS = []
 
+CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins for development
+
+CORS_ALLOW_METHODS = [
+    "GET",
+    "POST",
+    "OPTIONS",
+    "DELETE",
+    "PATCH",
+    "PUT",
+]
+
+CORS_ALLOW_HEADERS = [
+    "authorization",
+    "content-type",
+    "accept",
+]
+
 from datetime import timedelta
 
 REST_FRAMEWORK = {
@@ -70,7 +87,10 @@ INSTALLED_APPS = [
     'nilai',
     'matapelajaran',
     'accountmanage',
-    'absensi'
+    'absensi',
+    "corsheaders",
+     "rest_framework",
+
 ]
 
 MIDDLEWARE = [
@@ -81,6 +101,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "corsheaders.middleware.CorsMiddleware",  # CORS middleware must be placed at the top
+    "django.middleware.common.CommonMiddleware",
 ]
 
 ROOT_URLCONF = 'simak.urls'

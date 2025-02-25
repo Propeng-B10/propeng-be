@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth.models import User
 from .serializers import MyTokenObtainPairSerializer
+from rest_framework.views import APIView
 
 from django.http import JsonResponse
 import json
@@ -56,9 +57,13 @@ def protected_view(request):
     return Response({"username": request.user.username})
 
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def logout_view(request):
-    # Optionally, you can blacklist the token here
-    # For now, we'll just return a success message
-    return Response({"message": "Logged out successfully"})
+class logout_view(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def options(self, request, *args, **kwargs):
+        """Allow the OPTIONS request for CORS preflight."""
+        return Response(status=200)  # Respond OK to OPTIONS request
+
+    def post(self, request):
+        """Handle logout."""
+        return Response({"message": "Logged out successfully"}, status=200)
