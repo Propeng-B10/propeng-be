@@ -42,9 +42,10 @@ class RefreshTokenView(TokenRefreshView):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def protected_view(request):
-    print(request)
+    print(request.auth)
     try:
         # Manually authenticate the token
+        print(request)
         jwt_auth = JWTAuthentication()
         validated_token = jwt_auth.get_validated_token(request.auth)
         user = jwt_auth.get_user(validated_token)
