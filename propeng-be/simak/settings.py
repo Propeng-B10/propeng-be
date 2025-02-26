@@ -89,7 +89,7 @@ INSTALLED_APPS = [
     'accountmanage',
     'absensi',
     "corsheaders",
-     "rest_framework",
+    "rest_framework",
 
 ]
 
