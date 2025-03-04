@@ -23,11 +23,22 @@ class RegisterUserView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
+    # Require JWT authentication and that the user is authenticated
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def create(self, request, *args, **kwargs):
+        # Log the Authorization header (if provided)
+        auth_header = request.headers.get('Authorization')
+        print("Authorization header:", auth_header)
+
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            return Response({"message": "User created successfully!", "user_id": user.id}, status=status.HTTP_201_CREATED)
+            return Response(
+                {"message": "User created successfully!", "user_id": user.id},
+                status=status.HTTP_201_CREATED
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class MyTokenObtainPairView(TokenObtainPairView):

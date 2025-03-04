@@ -18,10 +18,12 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['username', 'email', 'password', 'role', 'nomorinduk', 'tahun_ajaran']
         extra_kwargs = {'password': {'write_only': True}}  # Hide password in responses
+    
+    
 
     def create(self, validated_data):
         role = validated_data.pop('role')
-        nomorinduk = validated_data.pop('nomorinduk')
+        nomorinduk = validated_data.pop('nomorinduk', None) if role == "student" else None
         tahun_ajaran = validated_data.pop("tahun_ajaran", None) if role == "student" else None
 
         # Create base User
