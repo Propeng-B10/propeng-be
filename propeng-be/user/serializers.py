@@ -36,8 +36,9 @@ class UserSerializer(serializers.ModelSerializer):
 
         # Assign role-specific attributes
         if role == "student":
-            if tahun_ajaran is None:
-                raise serializers.ValidationError({"tahun_ajaran": "This field is required for students."})
+            if tahun_ajaran is None or tahun_ajaran<=0 or tahun_ajaran is str:
+                user.delete()
+                raise serializers.ValidationError({"tahun_ajaran is incorrect, either negative or in string"})
             Student.objects.create(user=user, nisn=nomorinduk, tahun_ajaran=tahun_ajaran)
             
         elif role == "teacher":
