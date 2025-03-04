@@ -19,12 +19,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class IsAdminRole(BasePermission):
+class IsAdminRoleOrSuperUser(BasePermission):
     """
     only allow users with role 'admin' to access the view.
     """
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.role == 'admin')
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and (request.user.role == 'admin' or request.user.is_superuser)
+        )
 
 class RegisterUserView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -32,7 +36,7 @@ class RegisterUserView(generics.CreateAPIView):
 
     # Require JWT authentication and that the user is authenticated
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, IsAdminRoleOrSuperUser]
 
     def create(self, request, *args, **kwargs):
         # Log the Authorization header (if provided)
