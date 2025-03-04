@@ -6,7 +6,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, BasePermission
 from django.contrib.auth.models import User
 from .serializers import MyTokenObtainPairSerializer, UserSerializer
 from rest_framework.views import APIView
@@ -19,13 +19,20 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+class IsAdminRole(BasePermission):
+    """
+    only allow users with role 'admin' to access the view.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.role == 'admin')
+
 class RegisterUserView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
     # Require JWT authentication and that the user is authenticated
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminRole]
 
     def create(self, request, *args, **kwargs):
         # Log the Authorization header (if provided)
