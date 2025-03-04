@@ -12,15 +12,17 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     
 class UserSerializer(serializers.ModelSerializer):
     nomorinduk = serializers.CharField(write_only=True)  # Custom field for NISN/NISP
+    tahun_ajaran = serializers.IntegerField(write_only=True, required=False)
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'role', 'nomorinduk']
+        fields = ['username', 'email', 'password', 'role', 'nomorinduk', 'tahun_ajaran']
         extra_kwargs = {'password': {'write_only': True}}  # Hide password in responses
 
     def create(self, validated_data):
         role = validated_data.pop('role')
         nomorinduk = validated_data.pop('nomorinduk')
+        tahun_ajaran = validated_data.pop("tahun_ajaran", None) if role == "student" else None
 
         # Create base User
         user = User.objects.create(
@@ -34,7 +36,10 @@ class UserSerializer(serializers.ModelSerializer):
 
         # Assign role-specific attributes
         if role == "student":
-            Student.objects.create(user=user, nisn=nomorinduk)
+            if tahun_ajaran is None:
+                raise serializers.ValidationError({"tahun_ajaran": "This field is required for students."})
+            Student.objects.create(user=user, nisn=nomorinduk, tahun_ajaran=tahun_ajaran)
+            
         elif role == "teacher":
             Teacher.objects.create(user=user, nisp=nomorinduk)
 

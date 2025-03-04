@@ -15,6 +15,7 @@ class User(AbstractUser):
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     nisn = models.CharField(null=True, blank=True, max_length=20)
+    tahun_ajaran = models.PositiveIntegerField()
 
     def __str__(self):
         return f"{self.user.username} - Student"
