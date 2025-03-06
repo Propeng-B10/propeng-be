@@ -1,39 +1,46 @@
-name: Django CI
+name: Django CI/CD
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     strategy:
-      max-parallel: 4
       matrix:
         python-version: [3.9]
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
       with:
         python-version: ${{ matrix.python-version }}
+
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install "Django>=4.2,<5.0"  # Install the latest stable Django 4.2.x
+        pip install "Django>=4.2,<5.0"
         pip install -r requirements.txt
+
     - name: Run Tests
       run: |
-        cd propeng-be  # Change directory to the project folder
+        cd propeng-be
         python manage.py test
+
+    - name: Install Altostra CLI
+      run: |
+        curl -sSfL https://altostra.com/install | sh
+        echo 'export PATH=$HOME/.altostra/bin:$PATH' >> $GITHUB_ENV
 
     - name: Altostra Push and Deploy
       uses: altostra/push-deploy-action@v1.0.0
       with:
-        env-name: "production"  # Change to your environment name (e.g., staging, dev, prod)
-        instance-name: "my-instance"  # Change this to your Altostra instance name
+        env-name: "production"  # Replace with your environment name
+        instance-name: "my-instance"  # Replace with your instance name
         image-name: "latest"  # Optional: specify an image version if needed
