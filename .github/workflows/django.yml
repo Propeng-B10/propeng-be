@@ -35,7 +35,7 @@ jobs:
 
     - name: Install Altostra CLI
       run: |
-        curl -sSfL https://altostra.com/install | sh
+        curl -sSfL https://altostra.com/install | bash
         echo 'export PATH=$HOME/.altostra/bin:$PATH' >> $GITHUB_ENV
 
     - name: Altostra Push and Deploy
