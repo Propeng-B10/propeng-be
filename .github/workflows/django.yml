@@ -30,3 +30,10 @@ jobs:
       run: |
         cd propeng-be  # Change directory to the project folder
         python manage.py test
+
+    - name: Altostra Push and Deploy
+      uses: altostra/push-deploy-action@v1.0.0
+      with:
+        env-name: "production"  # Change to your environment name (e.g., staging, dev, prod)
+        instance-name: "my-instance"  # Change this to your Altostra instance name
+        image-name: "latest"  # Optional: specify an image version if needed
