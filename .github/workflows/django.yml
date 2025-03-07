@@ -24,9 +24,11 @@ jobs:
 
     - name: Modify Django Version in requirements.txt (if present)
       run: |
-        if grep -i '^django' requirements.txt; then
-          sed -i 's/^django.*/Django>=4.2,<5.0/' requirements.txt
-        fi
+            if grep -i '^django' requirements.txt; then
+              sed -i 's/^django.*/Django>=4.2,<5.0/' requirements.txt
+            fi
+            echo "Updated requirements.txt content:"
+            cat requirements.txt  # Debugging step to verify changes
 
     - name: Install Dependencies
       run: |
