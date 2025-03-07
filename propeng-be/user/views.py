@@ -11,7 +11,7 @@ from django.contrib.auth.models import User
 from .serializers import MyTokenObtainPairSerializer, UserSerializer
 from rest_framework.views import APIView
 from rest_framework import status, generics
-from .models import User
+from .models import Student, Teacher, User
 
 from django.http import JsonResponse
 import json
@@ -77,18 +77,42 @@ class RefreshTokenView(TokenRefreshView):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def protected_view(request):
-    print(request.auth)
     try:
-        # Manually authenticate the token
-        print(request)
-        jwt_auth = JWTAuthentication()
-        validated_token = jwt_auth.get_validated_token(request.auth)
-        user = jwt_auth.get_user(validated_token)
-        print("🔹 Validated User:", user.username)  # Log the user
-    except (InvalidToken, TokenError) as e:
-        print("❌ Token Error:", e)  # Log token validation errors
+        user = request.user  # Use request.user directly
 
-    return Response({"username": request.user.username})
+        # Initialize response data
+        user_data = {
+            "user_id": user.id,  # Store the original user ID
+            "username": user.username,
+            "email": user.email,
+            "role": user.role,
+            "id": None  # Will hold student/teacher ID
+        }
+
+        # Fetch role-specific ID
+        if user.role == "student":
+            student = Student.objects.filter(user=user).first()
+            if student:
+                user_data["id"] = student.id  # Use student ID
+                user_data["nisn"] = student.nisn
+                user_data["tahun_ajaran"] = student.tahun_ajaran
+            else:
+                return Response({"error": "Student record not found"}, status=404)
+
+        elif user.role == "teacher":
+            teacher = Teacher.objects.filter(user=user).first()
+            if teacher:
+                user_data["id"] = teacher.id  # Use teacher ID
+                user_data["nisp"] = teacher.nisp
+                user_data["homeroom_id"] = teacher.homeroom_id
+            else:
+                return Response({"error": "Teacher record not found"}, status=404)
+
+        return Response(user_data, status=200)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)  # Catch unexpected errors
+
 
 
 class logout_view(APIView):

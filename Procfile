@@ -1,0 +1,1 @@
+web: gunicorn propeng.wsgi --log-file -
