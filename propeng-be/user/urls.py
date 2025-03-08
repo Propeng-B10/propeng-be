@@ -6,4 +6,8 @@ urlpatterns = [
     path('protected/', protected_view, name='protected'),
     path('logout/', logout_view.as_view(), name='logout'),
     path('register/', RegisterUserView.as_view(), name='register-user'),
+    path('list_teacher/', list_teacher, name="list_teacher"),
+    path('list_active_teacher/', list_active_teacher, name="list_active_teacher"),
+    path('list_student/', list_student, name="list_student"),
+    path('list_active_teacher/', list_active_student, name="list_active_student")
 ]

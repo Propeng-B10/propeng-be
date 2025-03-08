@@ -2,14 +2,79 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from rest_framework.decorators import api_view
 from kelas.models import Kelas
-from user.models import Teacher
+from kelas.models import Student
 
 '''
 [PBI 9] Menambahkan Kelas
 '''
-@api_view(['CREATE'])
+# Mengambil yang dipilih dari sekian list guru, murid
+@api_view(['POST'])
 def create_kelas(request):
-    return
+    # Mengambil 'body' nya
+    try: 
+        data = request.data
+        nama_kelas = data.get("namaKelas")
+        wali_kelas_id = data.get("waliKelas")
+        students_id = data.get("students",[])
+        tahun_ajaran = data.get("tahunAjaran")
+
+
+        # Memastikan wali kelas belum masuk kelas manapun
+        if Kelas.objects.filter(isActive=True, waliKelas_id = wali_kelas_id).exists():
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": "Wali kelas sudah masuk ke suatu kelas"
+            }, status=400)
+        
+
+        # Memastikan murid belum masuk kelas manapun
+        existing_students = Student.objects.filter(id__in=students_id)
+        students_in_active_classes = Kelas.objects.filter(
+            isActive=True, siswa__in=existing_students
+        ).values_list("siswa__id", flat=True)
+
+        students_already_in_class = set(students_id) & set(students_in_active_classes)
+
+        if students_already_in_class:
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": f"Siswa dengan ID {list(students_already_in_class)} sudah terdaftar di kelas lain!"
+            }, status=400)
+    
+        kelas = Kelas.objects.create(
+            namaKelas = nama_kelas,
+            waliKelas = wali_kelas_id,
+            tahun_ajaran = tahun_ajaran
+        )
+        kelas.siswa.set(existing_students)
+
+        return JsonResponse({
+            "status": 201,
+            "message": "Kelas berhasil dibuat!",
+            "data": {
+                "id": kelas.id,
+                "namaKelas": kelas.namaKelas,
+                "tahunAjaran": f"T.A. {kelas.tahunAjaran}/{kelas.tahunAjaran+1}",
+                "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})",
+                "totalSiswa": kelas.siswa.count(),
+                "siswa": [
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "nisn": s.nisn,
+                        "username": s.username,
+                        "tahunAjaran": s.tahunAjaran,
+                        "createdAt": s.createdAt,
+                        "updatedAt": s.updatedAt
+                    } for s in kelas.siswa.all()
+                ]
+            }
+        }, status=201)
+    
+    except Exception:
+        return JsonResponse(
+            {"status":500, "errorMessage":"Terjadi kesalahan saat membuat kelas"}
+        )
 
 '''
 [PBI 10] Melihat Kelas: List Kelas

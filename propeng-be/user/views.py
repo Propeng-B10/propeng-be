@@ -19,6 +19,123 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+'''
+[PBI 2] Melihat Daftar Akun Pengguna 
+'''
+
+# Mendapatkan info dropdown list semua guru (aktif dan tidak)
+@api_view(['GET'])
+def list_teacher(request):
+    teacher = Teacher.objects.all().order_by('-updatedAt')
+
+    if not teacher.exists():
+        return JsonResponse({
+            "status":400, 
+            "message":"Belum ada guru yang ditambahkan", 
+            }) 
+    return JsonResponse({
+        "status":200, 
+        "message":"Sukses menampilkan list guru", 
+        "data": 
+            [
+                {
+                    "id": t.id,
+                    "name": t.name,
+                    "nisp": t.nisp,
+                    "username": t.username,
+                    "createdAt": t.createdAt,
+                    "updatedAt": t.updatedAt
+                } for t in teacher
+
+            ] 
+        }) 
+
+# Mendapatkan info dropdown list guru aktif
+@api_view(['GET'])
+def list_active_teacher(request):
+    active_teacher = Teacher.objects.all().filter(isDeleted=False)
+    teacher = active_teacher.order_by('-updatedAt')
+
+    if not teacher.exists():
+        return JsonResponse({
+            "status":400, 
+            "message":"Belum ada guru yang ditambahkan", 
+            }) 
+    return JsonResponse({
+        "status":200, 
+        "message":"Sukses menampilkan list guru", 
+        "data": 
+            [
+                {
+                    "id": t.id,
+                    "name": t.name,
+                    "nisp": t.nisp,
+                    "username": t.username,
+                    "createdAt": t.createdAt,
+                    "updatedAt": t.updatedAt
+                } for t in teacher
+
+            ] 
+        }) 
+
+# Mendapatkan info dropdown list semua murid (aktif dan tidak)
+@api_view(['GET'])
+def list_student(request):
+    student = Student.objects.all().order_by('-updatedAt')
+
+    if not student.exists():
+        return JsonResponse({
+            "status":400, 
+            "message":"Belum ada murid yang ditambahkan", 
+            }) 
+    return JsonResponse({
+        "status":200, 
+        "message":"Sukses menampilkan list murid", 
+        "data": 
+            [
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "nisn": s.nisn,
+                    "username": s.username,
+                    "tahunAjaran": s.tahunAjaran,
+                    "createdAt": s.createdAt,
+                    "updatedAt": s.updatedAt
+                } for s in student
+
+            ] 
+        }) 
+
+# Mendapatkan info dropdown list murid aktif
+@api_view(['GET'])
+def list_active_student(request):
+    active_student = Student.objects.all().filter(isDeleted=False)
+    student = active_student.order_by('-updatedAt')
+
+    if not student.exists():
+        return JsonResponse({
+            "status":400, 
+            "message":"Belum ada murid yang ditambahkan", 
+            }) 
+    return JsonResponse({
+        "status":200, 
+        "message":"Sukses menampilkan list murid", 
+        "data": 
+            [
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "nisn": s.nisn,
+                    "username": s.username,
+                    "tahunAjaran": s.tahunAjaran,
+                    "createdAt": s.createdAt,
+                    "updatedAt": s.updatedAt
+                } for s in student
+
+            ] 
+        }) 
+
 class IsAdminRole(BasePermission):
     """
     only allow users with role 'admin' to access the view.
