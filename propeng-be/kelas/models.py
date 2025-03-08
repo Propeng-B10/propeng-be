@@ -5,7 +5,7 @@ from user.models import Student
 class Kelas(models.Model):
     namaKelas = models.CharField(max_length=100)    
     tahunAjaran = models.IntegerField()             
-    isActive = models.BooleanField(default=True)            # Defaultnya aktif
+    isActive = models.BooleanField(default=True)            # Defaultnya aktif 
     waliKelas = models.OneToOneField(
         Teacher,
         related_name= "waliKelas",                          
