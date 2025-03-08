@@ -171,25 +171,30 @@ def detail_kelas(request, kelas_id):
                 "errorMessage": "Tidak ada siswa di kelas ini. Silakan kembali."
             }, status = 400) 
         
-        return JsonResponse({
-                "isEmpty":isEmptyClass,
-                "isEmptySiswainClass":isEmptySiswainClass,
-                "status": 200,
-                "id": kelas.id,
-                "nama": kelas.namaKelas,
-                "tahunAjaran": f"T.A. {kelas.tahunAjaran.tahunAjaran}/{kelas.tahunAjaran.tahunAjaran+1}",
-                "statusKelas": kelas.isActive,
-                "waliKelas": f"{kelas.waliKelas.name} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else "Belum ada wali kelas",
-                "totalSiswa": kelas.siswa.count(),
-                # "data": [
-                #     {
-                #         "idSiswa" : s.id,
-                #         "nama" : s.name,
-                #         "username" : s.username,
-                #         "nisn" : s.nisn,
-                #     } for s in siswa
-                # ],
-            }, status = 200)
+        return JsonResponse(
+            {
+            "isEmpty":isEmptyClass,
+            "isEmptySiswainClass":isEmptySiswainClass,
+            "status": 201,
+            "message": "Kelas yang dicari ada",
+            "id": kelas.id,
+            "namaKelas": kelas.namaKelas,
+            "tahunAjaran": f"T.A. {kelas.tahunAjaran.tahunAjaran}/{kelas.tahunAjaran.tahunAjaran+1}",
+            "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})",
+            "totalSiswa": kelas.siswa.count(),
+            "siswa": [
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "nisn": s.nisn,
+                        "username": s.username,
+                        # "tahunAjaran": s.tahunAjaran.tahunAjaran,
+                        # "createdAt": s.createdAt,
+                        # "updatedAt": s.updatedAt
+                    } for s in kelas.siswa.all()
+                ]
+            }
+            )
     
     except Kelas.DoesNotExist:
         isEmptyClass = True
