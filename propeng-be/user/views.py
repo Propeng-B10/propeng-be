@@ -11,7 +11,8 @@ from django.contrib.auth.models import User
 from .serializers import MyTokenObtainPairSerializer, UserSerializer
 from rest_framework.views import APIView
 from rest_framework import status, generics
-from .models import Student, Teacher, User, TahunAjaran
+from .models import Student, Teacher, User
+from kelas.models import Kelas
 
 from django.http import JsonResponse
 import json
@@ -44,6 +45,7 @@ def list_teacher(request):
                     "name": t.name,
                     "nisp": t.nisp,
                     "username": t.username,
+                    "waliKelas": Kelas.objects.filter(waliKelas_id=t.id).values_list("namaKelas", flat=True).first() or "",
                     "createdAt": t.createdAt,
                     "updatedAt": t.updatedAt
                 } for t in teacher
@@ -72,6 +74,7 @@ def list_active_teacher(request):
                     "name": t.name,
                     "nisp": t.nisp,
                     "username": t.username,
+                    "waliKelas": Kelas.objects.filter(waliKelas_id=t.id).values_list("namaKelas", flat=True).first() or "",
                     "createdAt": t.createdAt,
                     "updatedAt": t.updatedAt
                 } for t in teacher
