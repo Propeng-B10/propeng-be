@@ -1,11 +1,12 @@
 from django.db import models
 from user.models import Teacher
 from user.models import Student
-from kelas.models import TahunAjaran
+from tahunajaran.models import TahunAjaran
+from django.utils import timezone
 
 class Kelas(models.Model):
     namaKelas = models.CharField(max_length=100)    
-    tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL)             
+    tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)           
     isActive = models.BooleanField(default=True)            # Defaultnya aktif 
     waliKelas = models.OneToOneField(
         Teacher,
@@ -18,8 +19,5 @@ class Kelas(models.Model):
         Student,
         related_name= "siswa",
     )
-    createdAt = models.DateTimeField(auto_now_add=True)  
+    createdAt = models.DateTimeField(default=timezone.now)  
     updatedAt = models.DateTimeField(auto_now=True) 
-
-class TahunAjaran(models.Model):
-    tahunAjaran = models.IntegerField(unique=True, null=True)

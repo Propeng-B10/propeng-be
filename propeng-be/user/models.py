@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from kelas.models import TahunAjaran
+from tahunajaran.models import TahunAjaran
+from django.utils import timezone
 
 class User(AbstractUser):
     ROLE_CHOICES = (
@@ -18,11 +19,11 @@ class Student(models.Model):
     name = models.CharField(null=True, blank=True, max_length=32)
     username = models.CharField(null=True, blank=True, max_length=32)
     nisn = models.CharField(null=True, blank=True, max_length=20)
-    tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL)
+    tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)
     isActive = models.BooleanField(default=True)
     isDeleted = models.BooleanField(default=False)
-    createdAt = models.DateTimeField(auto_now_add=True)
-    updatedAt = models.DateTimeField(auto_now_add=False)
+    createdAt = models.DateTimeField(default=timezone.now)
+    updatedAt = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.user.username} - Student"
@@ -35,8 +36,8 @@ class Teacher(models.Model):
     homeroomId = models.IntegerField(null=True, blank=True)
     isActive = models.BooleanField(default=True)
     isDeleted = models.BooleanField(default=False)
-    createdAt = models.DateTimeField(auto_now_add=True)
-    updatedAt = models.DateTimeField(auto_now_add=False)
+    createdAt = models.DateTimeField(default=timezone.now)
+    updatedAt = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.user.username} - Teacher"

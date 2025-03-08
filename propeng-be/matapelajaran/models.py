@@ -1,6 +1,6 @@
 from django.db import models
 from user.models import Teacher, Student
-from kelas.models import TahunAjaran
+from tahunajaran.models import TahunAjaran
 
 class MataPelajaran(models.Model):  # Renamed from User to MataPelajaran
     MATKUL_CHOICES = [
@@ -16,7 +16,7 @@ class MataPelajaran(models.Model):  # Renamed from User to MataPelajaran
     namaMatpel = models.CharField(max_length=100, choices=MATKUL_CHOICES)
     kode = models.CharField(max_length=20, unique=True, blank=True)
     kelas = models.IntegerField()
-    tahun_ajaran = models.ForeignKey(TahunAjaran,on_delete=models.SET_NULL)  # Ensure integer type for better handling
+    tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)  # Ensure integer type for better handling
 
     teacher = models.ForeignKey(
         Teacher, 
@@ -34,11 +34,11 @@ class MataPelajaran(models.Model):  # Renamed from User to MataPelajaran
     is_archived = models.BooleanField(default=False)  # Use a better name for expiry
 
     class Meta:
-        unique_together = ('namaMatpel', 'kelas', 'tahun_ajaran') 
+        unique_together = ('namaMatpel', 'kelas', 'tahunAjaran') 
 
     def save(self, *args, **kwargs):
         if not self.kode:  # Auto-generate kode if not provided
-            self.kode = f"{self.namaMatpel.replace('_', '').upper()}_{self.kelas}_{self.tahun_ajaran}"
+            self.kode = f"{self.namaMatpel.replace('_', '').upper()}_{self.kelas}_{self.tahunAjaran}"
         super().save(*args, **kwargs)
 
 
@@ -53,4 +53,4 @@ class MataPelajaran(models.Model):  # Renamed from User to MataPelajaran
         self.save()
 
     def __str__(self):
-        return f"{self.get_namaMatpel_display()} ({self.kode}) - Tahun {self.tahun_ajaran}"
+        return f"{self.get_namaMatpel_display()} ({self.kode}) - Tahun {self.tahunAjaran}"
