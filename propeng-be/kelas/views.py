@@ -3,6 +3,8 @@ from django.http import JsonResponse
 from rest_framework.decorators import api_view
 from kelas.models import Kelas
 from kelas.models import Student
+from kelas.models import Teacher
+from tahunajaran.models import TahunAjaran
 
 '''
 [PBI 9] Menambahkan Kelas
@@ -16,18 +18,39 @@ def create_kelas(request):
         nama_kelas = data.get("namaKelas")
         wali_kelas_id = data.get("waliKelas")
         students_id = data.get("students",[])
-        tahun_ajaran = data.get("tahunAjaran")
+        tahun_ajaran_id = data.get("tahunAjaran")
 
+
+        # Memastikan wali kelas ada di db
+        try:
+            wali_kelas = Teacher.objects.get(id=wali_kelas_id)
+        except Teacher.DoesNotExist:
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": "Wali kelas tidak ditemukan"
+            }, status=400)
+        
+        # Memastikan tahun ajaran ada di db
+        try:
+            tahun_ajaran = TahunAjaran.objects.get(tahunAjaran=tahun_ajaran_id)
+        except TahunAjaran.DoesNotExist:
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": "Tahun ajaran tidak ditemukan"
+            }, status=400)
+        
         # Memastikan wali kelas belum masuk kelas manapun
-        if Kelas.objects.filter(isActive=True, waliKelas_id = wali_kelas_id).exists():
+        if Kelas.objects.filter(isActive=True, waliKelas=wali_kelas).exists():
             return JsonResponse({
                 "status": 400,
                 "errorMessage": "Wali kelas sudah masuk ke suatu kelas"
             }, status=400)
         
 
-        # Memastikan murid belum masuk kelas manapun
+        # Ambil daftar siswa dari database
         existing_students = Student.objects.filter(id__in=students_id)
+
+        # Memastikan murid belum masuk kelas lain
         students_in_active_classes = Kelas.objects.filter(
             isActive=True, siswa__in=existing_students
         ).values_list("siswa__id", flat=True)
@@ -39,12 +62,15 @@ def create_kelas(request):
                 "status": 400,
                 "errorMessage": f"Siswa dengan ID {list(students_already_in_class)} sudah terdaftar di kelas lain!"
             }, status=400)
-    
+
+        # Buat objek kelas
         kelas = Kelas.objects.create(
-            namaKelas = nama_kelas,
-            waliKelas = wali_kelas_id,
-            tahun_ajaran = tahun_ajaran
+            namaKelas=nama_kelas,
+            waliKelas=wali_kelas,
+            tahunAjaran=tahun_ajaran 
         )
+
+        # Tambahkan siswa ke dalam kelas
         kelas.siswa.set(existing_students)
 
         return JsonResponse({
@@ -53,7 +79,7 @@ def create_kelas(request):
             "data": {
                 "id": kelas.id,
                 "namaKelas": kelas.namaKelas,
-                "tahunAjaran": f"T.A. {kelas.tahunAjaran}/{kelas.tahunAjaran+1}",
+                "tahunAjaran": f"T.A. {kelas.tahunAjaran.tahunAjaran}/{kelas.tahunAjaran.tahunAjaran+1}",
                 "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})",
                 "totalSiswa": kelas.siswa.count(),
                 "siswa": [
@@ -62,7 +88,7 @@ def create_kelas(request):
                         "name": s.name,
                         "nisn": s.nisn,
                         "username": s.username,
-                        "tahunAjaran": s.tahunAjaran,
+                        "tahunAjaran": s.tahunAjaran.tahunAjaran,
                         "createdAt": s.createdAt,
                         "updatedAt": s.updatedAt
                     } for s in kelas.siswa.all()
@@ -96,24 +122,33 @@ def list_kelas(request):
                 "errorMessage": "Belum ada kelas yang terdaftar! Silahkan menambahkan kelas baru."
             }, status = 400)
 
+    ''' Ini pertama ngecek isEmpty dulu, 
+    nah kalau False baru deh ambil data.json dari "data" '''
     return JsonResponse({
-
-        ''' Ini pertama ngecek isEmpty dulu, 
-        nah kalau False baru deh ambil data.json dari "data" '''
-
             "isEmpty":isEmpty,
-            "status": 200,
+            "status": 201,
+            "message": "Semua kelas berhasil diambil!",
             "data": [
                 {
                 "id": k.id,
-                "nama": k.namaKelas ,
-                "tahunAjaran": f"T.A. {k.tahunAjaran}/{k.tahunAjaran+1}",
-                "statusKelas": k.isActive,
-                "waliKelas": k.waliKelas,
+                "namaKelas": k.namaKelas,
+                "tahunAjaran": f"T.A. {k.tahunAjaran.tahunAjaran}/{k.tahunAjaran.tahunAjaran+1}",
+                "waliKelas": f"{k.waliKelas} (NISP: {k.waliKelas.nisp})",
                 "totalSiswa": k.siswa.count(),
-                } for k in kelas
-            ],
-        }, status = 200)
+                "siswa": [
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "nisn": s.nisn,
+                        "username": s.username,
+                        "tahunAjaran": s.tahunAjaran.tahunAjaran,
+                        "createdAt": s.createdAt,
+                        "updatedAt": s.updatedAt
+                    } for s in k.siswa.all()
+                ]
+                } for k in kelas.all()
+            ]
+        }, status=201)
 
 
 '''
@@ -142,18 +177,18 @@ def detail_kelas(request, kelas_id):
                 "status": 200,
                 "id": kelas.id,
                 "nama": kelas.namaKelas,
-                "tahunAjaran": f"T.A. {kelas.tahunAjaran}/{kelas.tahunAjaran+1}",
+                "tahunAjaran": f"T.A. {kelas.tahunAjaran.tahunAjaran}/{kelas.tahunAjaran.tahunAjaran+1}",
                 "statusKelas": kelas.isActive,
                 "waliKelas": f"{kelas.waliKelas.name} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else "Belum ada wali kelas",
                 "totalSiswa": kelas.siswa.count(),
-                "data": [
-                    {
-                        "idSiswa" : s.id,
-                        "nama" : s.name,
-                        "username" : s.username,
-                        "nisn" : s.nisn,
-                    } for s in siswa
-                ],
+                # "data": [
+                #     {
+                #         "idSiswa" : s.id,
+                #         "nama" : s.name,
+                #         "username" : s.username,
+                #         "nisn" : s.nisn,
+                #     } for s in siswa
+                # ],
             }, status = 200)
     
     except Kelas.DoesNotExist:
@@ -187,27 +222,27 @@ def update_kelas(request, kelas_id):
                 "errorMessage": "Kelas tidak ditemukan!"
             }, status=404)
 
-        # Pastikan wali kelas yang baru belum masuk kelas lain
-        if wali_kelas_id and Kelas.objects.filter(
-            isActive=True, waliKelas_id=wali_kelas_id
-        ).exclude(id=kelas_id).exists():
+        # Memastikan wali kelas hanya ada di satu kelas aktif
+        if wali_kelas_id and Kelas.objects.filter(isActive=True, waliKelas_id=wali_kelas_id).exclude(id=kelas_id).exists():
             return JsonResponse({
                 "status": 400,
-                "errorMessage": "Wali kelas sudah masuk ke suatu kelas lain!"
+                "errorMessage": "Wali kelas sudah mengajar di kelas lain yang masih aktif!"
             }, status=400)
 
-        # Pastikan murid yang baru belum masuk kelas lain
+        # Memastikan apakah siswa sudah masuk kelas lain yang masih aktif
         existing_students = Student.objects.filter(id__in=students_id)
-        students_in_active_classes = Kelas.objects.filter(
-            isActive=True, siswa__in=existing_students
-        ).exclude(id=kelas_id).values_list("siswa__id", flat=True)
+        students_in_active_classes = set(
+            Kelas.objects.filter(isActive=True, siswa__in=existing_students)
+            .exclude(id=kelas_id)
+            .values_list("siswa__id", flat=True)
+        )
 
-        students_already_in_class = set(students_id) & set(students_in_active_classes)
+        students_already_in_class = set(students_id) & students_in_active_classes
 
         if students_already_in_class:
             return JsonResponse({
                 "status": 400,
-                "errorMessage": f"Siswa dengan ID {list(students_already_in_class)} sudah terdaftar di kelas lain!"
+                "errorMessage": f"Siswa dengan ID {list(students_already_in_class)} sudah masuk ke kelas lain yang masih aktif!"
             }, status=400)
 
         # Update data kelas jika ada perubahan

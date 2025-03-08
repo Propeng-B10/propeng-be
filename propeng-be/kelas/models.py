@@ -8,10 +8,9 @@ class Kelas(models.Model):
     namaKelas = models.CharField(max_length=100)    
     tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)           
     isActive = models.BooleanField(default=True)            # Defaultnya aktif 
-    waliKelas = models.OneToOneField(
+    waliKelas = models.ForeignKey(
         Teacher,
         related_name= "waliKelas",                          
-        unique= True,                                       # Wali Kelas di-assign ke suatu orang aja
         on_delete= models.SET_NULL,                         # Wali Kelas jika didelete set null (soft delete)
         null= True                                
     )
