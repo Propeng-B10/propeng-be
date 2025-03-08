@@ -211,7 +211,7 @@ def protected_view(request):
             if student:
                 user_data["id"] = student.id  # Use student ID
                 user_data["nisn"] = student.nisn
-                user_data["tahun_ajaran"] = student.tahun_ajaran
+                user_data["tahun_ajaran"] = student.tahunAjaran
             else:
                 return Response({"error": "Student record not found"}, status=404)
 
@@ -220,7 +220,7 @@ def protected_view(request):
             if teacher:
                 user_data["id"] = teacher.id  # Use teacher ID
                 user_data["nisp"] = teacher.nisp
-                user_data["homeroom_id"] = teacher.homeroom_id
+                user_data["homeroom_id"] = teacher.homeroomId
             else:
                 return Response({"error": "Teacher record not found"}, status=404)
 

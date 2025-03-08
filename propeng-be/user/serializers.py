@@ -1,7 +1,7 @@
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from django.contrib.auth.hashers import make_password
-from .models import User, Student, Teacher
+from .models import User, Student, Teacher, TahunAjaran
 from django.contrib.auth import get_user_model
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -13,11 +13,11 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     
 class UserSerializer(serializers.ModelSerializer):
     nomorinduk = serializers.CharField(write_only=True)  # Custom field for NISN/NISP
-    tahun_ajaran = serializers.IntegerField(write_only=True, required=False)
+    tahunAjaran = serializers.IntegerField(write_only=True, required=False)
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'role', 'nomorinduk', 'tahun_ajaran']
+        fields = ['username', 'email', 'password', 'role', 'nomorinduk', 'tahunAjaran']
         extra_kwargs = {'password': {'write_only': True}}  # Hide password in responses
     
     
@@ -25,7 +25,7 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         role = validated_data.pop('role')
         nomorinduk = validated_data.pop('nomorinduk', None) if role == "student" else None
-        tahun_ajaran = validated_data.pop("tahun_ajaran", None) if role == "student" else None
+        tahunAjaran = validated_data.pop("tahunAjaran", None) if role == "student" else None
 
         # Create base User
         user = User.objects.create(
@@ -39,11 +39,15 @@ class UserSerializer(serializers.ModelSerializer):
 
         # Assign role-specific attributes
         if role == "student":
-            if tahun_ajaran is None or tahun_ajaran<=0 or tahun_ajaran is str:
+            if tahunAjaran is None or tahunAjaran<=0 or tahunAjaran is str:
                 user.delete()
-                raise serializers.ValidationError({"tahun_ajaran is incorrect, either negative or in string"})
-            Student.objects.create(user=user, nisn=nomorinduk, tahun_ajaran=tahun_ajaran)
-            
+                raise serializers.ValidationError({"tahunAjaran is incorrect, either negative or in string"})
+            # Buat atau ambil instance TahunAjaran
+            tahun_ajaran_instance, created = TahunAjaran.objects.get_or_create(tahunAjaran=tahunAjaran)
+
+            # Buat Student dengan instance TahunAjaran
+            Student.objects.create(user=user, nisn=nomorinduk, tahunAjaran=tahun_ajaran_instance)
+
         elif role == "teacher":
             Teacher.objects.create(user=user, nisp=nomorinduk)
 
