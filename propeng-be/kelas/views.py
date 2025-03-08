@@ -18,7 +18,6 @@ def create_kelas(request):
         students_id = data.get("students",[])
         tahun_ajaran = data.get("tahunAjaran")
 
-
         # Memastikan wali kelas belum masuk kelas manapun
         if Kelas.objects.filter(isActive=True, waliKelas_id = wali_kelas_id).exists():
             return JsonResponse({
@@ -169,9 +168,88 @@ def detail_kelas(request, kelas_id):
 '''
 [PBI 11] Mengubah Informasi Kelas
 '''
-@api_view(['PUT','PATCH'])
-def update_kelas(request):
-    return
+@api_view(['PUT', 'PATCH'])
+def update_kelas(request, kelas_id):
+    try:
+        # Ambil data dari request
+        data = request.data
+        nama_kelas = data.get("namaKelas")
+        wali_kelas_id = data.get("waliKelas")
+        students_id = data.get("students", [])
+        tahun_ajaran = data.get("tahunAjaran")
+
+        # Pastikan kelas yang ingin diupdate ada
+        try:
+            kelas = Kelas.objects.get(id=kelas_id)
+        except Kelas.DoesNotExist:
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": "Kelas tidak ditemukan!"
+            }, status=404)
+
+        # Pastikan wali kelas yang baru belum masuk kelas lain
+        if wali_kelas_id and Kelas.objects.filter(
+            isActive=True, waliKelas_id=wali_kelas_id
+        ).exclude(id=kelas_id).exists():
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": "Wali kelas sudah masuk ke suatu kelas lain!"
+            }, status=400)
+
+        # Pastikan murid yang baru belum masuk kelas lain
+        existing_students = Student.objects.filter(id__in=students_id)
+        students_in_active_classes = Kelas.objects.filter(
+            isActive=True, siswa__in=existing_students
+        ).exclude(id=kelas_id).values_list("siswa__id", flat=True)
+
+        students_already_in_class = set(students_id) & set(students_in_active_classes)
+
+        if students_already_in_class:
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": f"Siswa dengan ID {list(students_already_in_class)} sudah terdaftar di kelas lain!"
+            }, status=400)
+
+        # Update data kelas jika ada perubahan
+        if nama_kelas:
+            kelas.namaKelas = nama_kelas
+        if wali_kelas_id:
+            kelas.waliKelas_id = wali_kelas_id
+        if tahun_ajaran:
+            kelas.tahunAjaran = tahun_ajaran
+        if students_id:
+            kelas.siswa.set(existing_students)
+
+        kelas.save()
+
+        return JsonResponse({
+            "status": 200,
+            "message": "Kelas berhasil diperbarui!",
+            "data": {
+                "id": kelas.id,
+                "namaKelas": kelas.namaKelas,
+                "tahunAjaran": f"T.A. {kelas.tahunAjaran}/{kelas.tahunAjaran+1}",
+                "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})",
+                "totalSiswa": kelas.siswa.count(),
+                "siswa": [
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "nisn": s.nisn,
+                        "username": s.username,
+                        "tahunAjaran": s.tahunAjaran,
+                        "createdAt": s.createdAt.isoformat(),
+                        "updatedAt": s.updatedAt.isoformat(),
+                    } for s in kelas.siswa.all()
+                ]
+            }
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan saat mengupdate kelas: {str(e)}"
+        }, status=500)
 
 '''
 [PBI 12] Menghapus Kelas (Soft Delete)

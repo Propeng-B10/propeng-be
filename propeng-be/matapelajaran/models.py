@@ -16,7 +16,7 @@ class MataPelajaran(models.Model):  # Renamed from User to MataPelajaran
     namaMatpel = models.CharField(max_length=100, choices=MATKUL_CHOICES)
     kode = models.CharField(max_length=20, unique=True, blank=True)
     kelas = models.IntegerField()
-    tahun_ajaran = models.ForeignKey(on_delete=models.SET_NULL)  # Ensure integer type for better handling
+    tahun_ajaran = models.ForeignKey(TahunAjaran,on_delete=models.SET_NULL)  # Ensure integer type for better handling
 
     teacher = models.ForeignKey(
         Teacher, 
