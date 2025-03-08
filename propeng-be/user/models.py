@@ -14,6 +14,8 @@ class User(AbstractUser):
     
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
+    name = models.CharField(null=True, blank=True, max_length=32)
+    username = models.CharField(null=True, blank=True, max_length=32)
     nisn = models.CharField(null=True, blank=True, max_length=20)
     tahun_ajaran = models.PositiveIntegerField()
 
@@ -22,7 +24,9 @@ class Student(models.Model):
 
 class Teacher(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
+    name = models.CharField(null=True, blank=True, max_length=32)
     nisp = models.CharField(null=True, blank=True, max_length=20)
+    username = models.CharField(null=True, blank=True, max_length=32)
     homeroom_id = models.IntegerField(null=True, blank=True)
 
     def __str__(self):

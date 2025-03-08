@@ -88,6 +88,7 @@ INSTALLED_APPS = [
     'matapelajaran',
     'accountmanage',
     'absensi',
+    'kelas',
     "corsheaders",
     "rest_framework",
 
