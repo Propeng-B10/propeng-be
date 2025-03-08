@@ -132,7 +132,6 @@ def list_active_student(request):
                     "createdAt": s.createdAt,
                     "updatedAt": s.updatedAt
                 } for s in student
-
             ] 
         }) 
 
