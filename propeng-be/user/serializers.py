@@ -14,17 +14,18 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 class UserSerializer(serializers.ModelSerializer):
     nomorinduk = serializers.CharField(write_only=True)  # Custom field for NISN/NISP
     tahunAjaran = serializers.IntegerField(write_only=True, required=False)
-
+    name = serializers.CharField(write_only=True, required=False)
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'role', 'nomorinduk', 'tahunAjaran']
+        fields = ['name', 'username', 'email', 'password', 'role', 'nomorinduk', 'tahunAjaran']
         extra_kwargs = {'password': {'write_only': True}}  # Hide password in responses
     
     
 
     def create(self, validated_data):
         role = validated_data.pop('role')
-        nomorinduk = validated_data.pop('nomorinduk', None) if role == "student" else None
+        name = validated_data.pop("name")
+        nomorinduk = validated_data.pop('nomorinduk', None)
         tahunAjaran = validated_data.pop("tahunAjaran", None) if role == "student" else None
 
         # Create base User
@@ -46,9 +47,9 @@ class UserSerializer(serializers.ModelSerializer):
             tahun_ajaran_instance, created = TahunAjaran.objects.get_or_create(tahunAjaran=tahunAjaran)
 
             # Buat Student dengan instance TahunAjaran
-            Student.objects.create(user=user, nisn=nomorinduk, tahunAjaran=tahun_ajaran_instance)
+            Student.objects.create(user=user, nisn=nomorinduk, name=name, username=user.username, tahunAjaran=tahun_ajaran_instance)
 
         elif role == "teacher":
-            Teacher.objects.create(user=user, nisp=nomorinduk)
+            Teacher.objects.create(user=user, nisp=nomorinduk, name=name, username=user.username)
 
         return user

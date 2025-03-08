@@ -19,7 +19,7 @@ class Student(models.Model):
     name = models.CharField(null=True, blank=True, max_length=32)
     username = models.CharField(null=True, blank=True, max_length=32)
     nisn = models.CharField(null=True, blank=True, max_length=20)
-    tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)
+    tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.CASCADE, null=False, blank=False)
     isActive = models.BooleanField(default=True)
     isDeleted = models.BooleanField(default=False)
     createdAt = models.DateTimeField(default=timezone.now)

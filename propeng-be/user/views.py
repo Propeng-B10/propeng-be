@@ -11,7 +11,7 @@ from django.contrib.auth.models import User
 from .serializers import MyTokenObtainPairSerializer, UserSerializer
 from rest_framework.views import APIView
 from rest_framework import status, generics
-from .models import Student, Teacher, User
+from .models import Student, Teacher, User, TahunAjaran
 
 from django.http import JsonResponse
 import json
@@ -82,7 +82,7 @@ def list_active_teacher(request):
 # Mendapatkan info dropdown list semua murid (aktif dan tidak)
 @api_view(['GET'])
 def list_student(request):
-    student = Student.objects.all().order_by('-updatedAt')
+    student = Student.objects.select_related("tahunAjaran").all().order_by('-updatedAt')
 
     if not student.exists():
         return JsonResponse({
@@ -99,11 +99,10 @@ def list_student(request):
                     "name": s.name,
                     "nisn": s.nisn,
                     "username": s.username,
-                    "tahunAjaran": s.tahunAjaran,
+                    "tahunAjaran": s.tahunAjaran.tahunAjaran,
                     "createdAt": s.createdAt,
                     "updatedAt": s.updatedAt
                 } for s in student
-
             ] 
         }) 
 
@@ -128,7 +127,7 @@ def list_active_student(request):
                     "name": s.name,
                     "nisn": s.nisn,
                     "username": s.username,
-                    "tahunAjaran": s.tahunAjaran,
+                    "tahunAjaran": s.tahunAjaran_id,
                     "createdAt": s.createdAt,
                     "updatedAt": s.updatedAt
                 } for s in student
