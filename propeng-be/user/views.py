@@ -109,7 +109,7 @@ def list_student(request):
 # Mendapatkan info dropdown list murid aktif
 @api_view(['GET'])
 def list_active_student(request):
-    active_student = Student.objects.select_related("tahunAjaran")all().filter(isDeleted=False)
+    active_student = Student.objects.select_related("tahunAjaran").all().filter(isDeleted=False)
     student = active_student.order_by('-updatedAt')
 
     if not student.exists():
