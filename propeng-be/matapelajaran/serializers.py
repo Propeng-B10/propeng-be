@@ -4,21 +4,22 @@ from .models import MataPelajaran
 from user.models import Teacher, Student
 
 class MataPelajaranSerializer(serializers.ModelSerializer):
-    namaMatpel = serializers.ChoiceField(choices=MataPelajaran.MATKUL_CHOICES)
+    kategoriMatpel = serializers.ChoiceField(choices=MataPelajaran.MATKUL_CHOICES)
     teacher = serializers.PrimaryKeyRelatedField(queryset=Teacher.objects.all(), required=False, allow_null=True)
     siswa_terdaftar = serializers.PrimaryKeyRelatedField(queryset=Student.objects.all(), many=True, required=False)
 
     class Meta:
         model = MataPelajaran
-        fields = ['id', 'namaMatpel', 'kode', 'kelas', 'tahunAjaran', 'teacher', 'siswa_terdaftar', 'is_archived']
+        fields = ['id', 'kategoriMatpel','nama', 'kode', 'kelas', 'tahunAjaran', 'teacher', 'siswa_terdaftar', 'is_archived']
         read_only_fields = ['kode']  # Karena kode dibuat otomatis di `save()`
 
     def validate(self, data):
         """Check for uniqueness of namaMatpel, kelas, and tahun_ajaran"""
         if MataPelajaran.objects.filter(
-            namaMatpel=data['namaMatpel'],
+            nama=data['nama'],
             kelas=data['kelas'],
-            tahunAjaran=data['tahunAjaran']
+            tahunAjaran=data['tahunAjaran'],
+            kategoriMatpel=data['kategoriMatpel']
         ).exists():
             raise serializers.ValidationError({"status":400,
                 "detail": "MataPelajaran with this namaMatpel, kelas, and tahun_ajaran already exists."

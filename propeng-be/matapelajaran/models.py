@@ -13,7 +13,8 @@ class MataPelajaran(models.Model):  # Renamed from User to MataPelajaran
         ("BIOLOGI", "Biologi"),
     ]
 
-    namaMatpel = models.CharField(max_length=100, choices=MATKUL_CHOICES)
+    nama = models.TextField(max_length=100)
+    kategoriMatpel = models.CharField(max_length=50,choices=MATKUL_CHOICES)
     kode = models.CharField(max_length=20, unique=True, blank=True)
     kelas = models.IntegerField()
     tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)  # Ensure integer type for better handling
@@ -34,11 +35,11 @@ class MataPelajaran(models.Model):  # Renamed from User to MataPelajaran
     is_archived = models.BooleanField(default=False)  # Use a better name for expiry
 
     class Meta:
-        unique_together = ('namaMatpel', 'kelas', 'tahunAjaran') 
+        unique_together = ('kategoriMatpel', 'kelas', 'tahunAjaran') 
 
     def save(self, *args, **kwargs):
         if not self.kode:  # Auto-generate kode if not provided
-            self.kode = f"{self.namaMatpel.replace('_', '').upper()}_{self.kelas}_{self.tahunAjaran}"
+            self.kode = f"{self.kategoriMatpel.replace('_', '').upper()}_{self.kelas}_{self.tahunAjaran}"
         super().save(*args, **kwargs)
 
 
@@ -53,4 +54,4 @@ class MataPelajaran(models.Model):  # Renamed from User to MataPelajaran
         self.save()
 
     def __str__(self):
-        return f"{self.get_namaMatpel_display()} ({self.kode}) - Tahun {self.tahunAjaran}"
+        return f"{self.get_kategoriMatpel_display()} ({self.kode}) - Tahun {self.tahunAjaran}"
