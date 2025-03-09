@@ -163,10 +163,20 @@ class RegisterUserView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            return Response(
-                {"message": "User created successfully!", "user_id": user.id},
-                status=status.HTTP_201_CREATED
-            )
+            print(user.role)
+            print("yang diaatas")
+            if user.role is "student":
+                print("printed student")
+                return Response(
+                    {"status":201,"message": "User created successfully!", "user_name": Student.objects.filter(user=user).first().name},
+                    status=status.HTTP_201_CREATED
+                )
+            else:
+                print("printed teacher")
+                return Response(
+                    {"status":201,"message": "User created successfully!", "user_name": Teacher.objects.filter(user=user).first().name},
+                    status=status.HTTP_201_CREATED
+                )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class MyTokenObtainPairView(TokenObtainPairView):
@@ -204,7 +214,7 @@ def protected_view(request):
             "username": user.username,
             "email": user.email,
             "role": user.role,
-            "id": None  # Will hold student/teacher ID
+            "id": "no can do, u cant see your id"  # Will hold student/teacher ID
         }
 
         # Fetch role-specific ID
@@ -226,7 +236,9 @@ def protected_view(request):
             else:
                 return Response({"error": "Teacher record not found"}, status=404)
 
-        return Response(user_data, status=200)
+        return Response ({"status":200,
+                        "message":"Berhasil mendapatkan data user",
+                        "data_user":user_data})
 
     except Exception as e:
         return Response({"error": str(e)}, status=500)  # Catch unexpected errors

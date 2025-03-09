@@ -10,7 +10,7 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MataPelajaran
-        fields = ['id', 'namaMatpel', 'kode', 'kelas', 'tahun_ajaran', 'teacher', 'siswa_terdaftar', 'is_archived']
+        fields = ['id', 'namaMatpel', 'kode', 'kelas', 'tahunAjaran', 'teacher', 'siswa_terdaftar', 'is_archived']
         read_only_fields = ['kode']  # Karena kode dibuat otomatis di `save()`
 
     def validate(self, data):
@@ -18,9 +18,9 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         if MataPelajaran.objects.filter(
             namaMatpel=data['namaMatpel'],
             kelas=data['kelas'],
-            tahun_ajaran=data['tahun_ajaran']
+            tahunAjaran=data['tahunAjaran']
         ).exists():
-            raise serializers.ValidationError({
+            raise serializers.ValidationError({"status":400,
                 "detail": "MataPelajaran with this namaMatpel, kelas, and tahun_ajaran already exists."
             })  # 🔹 Ensure error is formatted correctly for API response
 
@@ -37,6 +37,6 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
 
             return matapelajaran
         except:
-            raise serializers.ValidationError({
+            raise serializers.ValidationError({"status":400,
                 "detail": "MataPelajaran with this namaMatpel, kelas, and tahun_ajaran already exists."
             })

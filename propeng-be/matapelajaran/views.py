@@ -11,9 +11,13 @@ def create_mata_pelajaran(request):
     serializer = MataPelajaranSerializer(data=request.data)
     if serializer.is_valid():
         serializer.save()
+        return Response(
+                    {"status":201,"message": "Matpel created successfully!", "Data": serializer.data},
+                    status=status.HTTP_201_CREATED
+                )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     else:
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"status":200,"message": "Unsuccessful!","error": serializer.errors})
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -31,7 +35,7 @@ def update_mata_pelajaran(request, pk):
     try:
         mata_pelajaran = MataPelajaran.objects.get(pk=pk)
     except MataPelajaran.DoesNotExist:
-        return Response({"error": "MataPelajaran not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"status":404,"message": "MataPelajaran not found"}, status=status.HTTP_404_NOT_FOUND)
 
     serializer = MataPelajaranSerializer(mata_pelajaran, data=request.data, partial=True)  # partial=True agar tidak wajib semua field dikirim
     if serializer.is_valid():
@@ -47,7 +51,7 @@ def delete_mata_pelajaran(request, pk):
     try:
         mata_pelajaran = MataPelajaran.objects.get(pk=pk)
     except MataPelajaran.DoesNotExist:
-        return Response({"error": "MataPelajaran not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"status":404,"error": "MataPelajaran not found"}, status=status.HTTP_404_NOT_FOUND)
 
     mata_pelajaran.delete()
-    return Response({"message": "MataPelajaran deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+    return Response({"status":404,"message": "MataPelajaran deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
