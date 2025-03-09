@@ -2,12 +2,17 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from .models import MataPelajaran
+from .models import MataPelajaran, TahunAjaran
 from .serializers import MataPelajaranSerializer
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_mata_pelajaran(request):
+
+    tahun_ajaran, created = TahunAjaran.objects.get_or_create(
+    tahunAjaran=request.data["tahunAjaran"])
+    request.data["tahunAjaran"] = tahun_ajaran.id 
+
     serializer = MataPelajaranSerializer(data=request.data)
     if serializer.is_valid():
         serializer.save()
@@ -37,6 +42,10 @@ def update_mata_pelajaran(request, pk):
     except MataPelajaran.DoesNotExist:
         return Response({"status":404,"message": "MataPelajaran not found"}, status=status.HTTP_404_NOT_FOUND)
 
+    tahun_ajaran, created = TahunAjaran.objects.get_or_create(
+        tahunAjaran=request.data["tahunAjaran"])
+    request.data["tahunAjaran"] = tahun_ajaran.id 
+        
     serializer = MataPelajaranSerializer(mata_pelajaran, data=request.data, partial=True)  # partial=True agar tidak wajib semua field dikirim
     if serializer.is_valid():
         serializer.save()

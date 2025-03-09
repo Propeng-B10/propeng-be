@@ -285,7 +285,7 @@ def update_kelas(request, kelas_id):
 
         # Pastikan kelas yang ingin diupdate ada
         try:
-            kelas = Kelas.objects.get(id=kelas_id)
+            kelas = Kelas.objects.get_or_create(id=kelas_id)
         except Kelas.DoesNotExist:
             return JsonResponse({
                 "status": 404,
