@@ -21,14 +21,6 @@ def create_kelas(request):
         tahun_ajaran_id = data.get("tahunAjaran")
 
 
-        # Update homeroomId di model Teacher
-        if wali_kelas_id is not None:
-            Teacher.objects.filter(id=wali_kelas_id).update(homeroomId=kelas.id)
-
-        # Kalau wali kelas dihapus dari kelas, homeroomId-nya juga dihapus
-        if wali_kelas_id is None and kelas.waliKelas:
-            Teacher.objects.filter(id=kelas.waliKelas_id).update(homeroomId=None)
-            
         # Memastikan wali kelas ada di db
         try:
             wali_kelas = Teacher.objects.get(id=wali_kelas_id)
@@ -78,6 +70,14 @@ def create_kelas(request):
             tahunAjaran=tahun_ajaran 
         )
 
+        # Update homeroomId di model Teacher
+        if wali_kelas_id is not None:
+            Teacher.objects.filter(id=wali_kelas_id).update(homeroomId=kelas.id)
+
+        # Kalau wali kelas dihapus dari kelas, homeroomId-nya juga dihapus
+        if wali_kelas_id is None and kelas.waliKelas:
+            Teacher.objects.filter(id=kelas.waliKelas_id).update(homeroomId=None)
+            
         # Tambahkan siswa ke dalam kelas
         kelas.siswa.set(existing_students)
 
@@ -86,9 +86,9 @@ def create_kelas(request):
             "message": "Kelas berhasil dibuat!",
             "data": {
                 "id": kelas.id,
-                "namaKelas": kelas.namaKelas,
-                "tahunAjaran": f"T.A. {kelas.tahunAjaran.tahunAjaran}/{kelas.tahunAjaran.tahunAjaran+1}",
-                "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})",
+                "namaKelas": kelas.namaKelas if kelas.namaKelas else None,
+                "tahunAjaran": f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}" if kelas.tahunAjaran else None,
+                "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
                 "totalSiswa": kelas.siswa.count(),
                 "siswa": [
                     {
@@ -104,9 +104,9 @@ def create_kelas(request):
             }
         }, status=201)
     
-    except Exception:
+    except Exception as e:
         return JsonResponse(
-            {"status":500, "errorMessage":"Terjadi kesalahan saat membuat kelas"}
+            {"status":500, "errorMessage": f"Terjadi kesalahan saat membuat kelas {e}"}
         )
 
 '''
@@ -139,9 +139,9 @@ def list_kelas(request):
             "data": [
                 {
                 "id": k.id,
-                "namaKelas": k.namaKelas,
-                "tahunAjaran": f"T.A. {k.tahunAjaran.tahunAjaran}/{k.tahunAjaran.tahunAjaran+1}",
-                "waliKelas": f"{k.waliKelas} (NISP: {k.waliKelas.nisp})",
+                "namaKelas": k.namaKelas if k.namaKelas else None,
+                "tahunAjaran": f"T.A. 20{k.tahunAjaran.tahunAjaran}/20{k.tahunAjaran.tahunAjaran+1}"  if k.tahunAjaran else None,
+                "waliKelas": f"{k.waliKelas} (NISP: {k.waliKelas.nisp})" if k.waliKelas else None,
                 "totalSiswa": k.siswa.count(),
                 "isActive": k.isActive,
                 "siswa": [
@@ -183,7 +183,7 @@ def detail_kelas(request, kelas_id):
             "message": "Tidak ada wali kelas di kelas ini",
             "id": kelas.id,
             "namaKelas": kelas.namaKelas if kelas.namaKelas!="" else None,
-            "tahunAjaran": (f"T.A. {kelas.tahunAjaran.tahunAjaran}/{kelas.tahunAjaran.tahunAjaran+1}"
+            "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
                             if kelas.tahunAjaran else None
             ),
             "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
@@ -213,7 +213,7 @@ def detail_kelas(request, kelas_id):
             "message": "Tidak ada siswa di kelas ini",
             "id": kelas.id,
             "namaKelas": kelas.namaKelas if kelas.namaKelas!="" else None,
-            "tahunAjaran": (f"T.A. {kelas.tahunAjaran.tahunAjaran}/{kelas.tahunAjaran.tahunAjaran+1}"
+            "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
                             if kelas.tahunAjaran else None
             ),
             "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
@@ -241,7 +241,7 @@ def detail_kelas(request, kelas_id):
             "message": "Kelas yang dicari ada",
             "id": kelas.id,
             "namaKelas": kelas.namaKelas if kelas.namaKelas!="" else None,
-            "tahunAjaran": (f"T.A. {kelas.tahunAjaran.tahunAjaran}/{kelas.tahunAjaran.tahunAjaran+1}"
+            "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
                             if kelas.tahunAjaran else None
             ),
             "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
@@ -353,7 +353,7 @@ def update_kelas(request, kelas_id):
             "data": {
                 "id": kelas.id,
                 "namaKelas": kelas.namaKelas if kelas.namaKelas!="" else None,
-                "tahunAjaran": (f"T.A. {kelas.tahunAjaran.tahunAjaran}/{kelas.tahunAjaran.tahunAjaran+1}"
+                "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
                                 if kelas.tahunAjaran else None
                 ),
                 "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
