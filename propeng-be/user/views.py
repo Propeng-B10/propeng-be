@@ -300,14 +300,14 @@ def protected_view(request):
             "user_id": user.id,  # Store the original user ID
             "username": user.username,
             "email": user.email,
-            "role": user.role,
-            "id": "no can do, u cant see your id"  # Will hold student/teacher ID
+            "role": user.role
         }
 
         # Fetch role-specific ID
         if user.role == "student":
             student = Student.objects.filter(user=user).first()
             if student:
+                user_data["name"] = student.name
                 user_data["id"] = student.id  # Use student ID
                 user_data["nisn"] = student.nisn
                 user_data["tahun_ajaran"] = student.tahunAjaran
@@ -317,6 +317,7 @@ def protected_view(request):
         elif user.role == "teacher":
             teacher = Teacher.objects.filter(user=user).first()
             if teacher:
+                user_data["name"] = teacher.name
                 user_data["id"] = teacher.id  # Use teacher ID
                 user_data["nisp"] = teacher.nisp
                 user_data["homeroom_id"] = teacher.homeroomId
