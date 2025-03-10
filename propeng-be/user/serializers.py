@@ -5,6 +5,36 @@ from .models import User, Student, Teacher, TahunAjaran
 from django.contrib.auth import get_user_model
 import re
 from django.contrib.auth.hashers import make_password
+
+
+class ChangePasswordSerializer(serializers.ModelSerializer):
+    new_password = serializers.CharField(write_only=True, required=True)
+
+    class Meta:
+        model = User
+        fields = ['new_password']
+
+    def validate_new_password(self, value):
+        """Validate the new password for strength."""
+        if len(value) < 8:
+            raise serializers.ValidationError("Password must be at least 8 characters long")
+
+        if not re.search(r'[A-Z]', value):
+            raise serializers.ValidationError("Password must contain at least one uppercase letter")
+
+        if not re.search(r'[a-z]', value):
+            raise serializers.ValidationError("Password must contain at least one lowercase letter")
+
+        if not re.search(r'[0-9]', value):
+            raise serializers.ValidationError("Password must contain at least one number")
+
+        return value
+
+    def update(self, instance, validated_data):
+        instance.password = make_password(validated_data['new_password'])  # Hash new password
+        instance.save()
+        return instance
+
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
@@ -19,7 +49,7 @@ class UserSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True, required=True)
     class Meta:
         model = User
-        fields = ['username','name',  'email', 'password', 'role', 'nomorinduk', 'tahunAjaran']
+        fields = ['name', 'username', 'email', 'password', 'role', 'nomorinduk', 'tahunAjaran']
         extra_kwargs = {'password': {'write_only': True}}  # Hide password in responses
     
 
@@ -61,7 +91,7 @@ class UserSerializer(serializers.ModelSerializer):
             tahun_ajaran_instance, created = TahunAjaran.objects.get_or_create(tahunAjaran=tahunAjaran)
 
             # Buat Student dengan instance TahunAjaran
-            Student.objects.create(user=user, nisn=nomorinduk, username=user.username, name=name, tahunAjaran=tahun_ajaran_instance)
+            Student.objects.create(user=user, nisn=nomorinduk, name=name, tahunAjaran=tahun_ajaran_instance)
 
         elif role == "teacher":
             if Teacher.objects.filter(nisp=nomorinduk).exists():

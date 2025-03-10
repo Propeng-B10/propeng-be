@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from django.contrib.auth.models import User
-from .serializers import MyTokenObtainPairSerializer, UserSerializer
+from .serializers import MyTokenObtainPairSerializer, UserSerializer, ChangePasswordSerializer
 from rest_framework.views import APIView
 from rest_framework import status, generics
 from .models import Student, Teacher, User
@@ -20,6 +20,20 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+class ChangePasswordView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        serializer = ChangePasswordSerializer(instance=request.user, data=request.data, context={'request': request})
+        
+        if serializer.is_valid():
+            serializer.save()  # Calls update() method
+            return Response({"status": "200", "message": "Password changed successfully"}, status=status.HTTP_200_OK)
+
+        return Response({"status": "400", "message": "Password failed to change", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 '''
@@ -331,32 +345,32 @@ class logout_view(APIView):
     
 
 
-@api_view(['PUT'])
-@permission_classes([IsAuthenticated]) 
-def change_password(request):
-    user = request.user
-    old_password = request.data.get("old_password")
-    new_password = request.data.get("new_password")
+# @api_view(['PUT'])
+# @permission_classes([IsAuthenticated]) 
+# def change_password(request):
+#     user = request.user
+#     old_password = request.data.get("old_password")
+#     new_password = request.data.get("new_password")
 
-    # Cek apakah password lama cocok dengan yang di-hash di database
-    if not user.check_password(old_password):
-        return Response({"error": "Password lama salah."}, status=status.HTTP_400_BAD_REQUEST)
+#     # Cek apakah password lama cocok dengan yang di-hash di database
+#     if not user.check_password(old_password):
+#         return Response({"error": "Password lama salah."}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Validasi password baru (minimal 8 karakter, ada huruf besar, kecil, angka)
-    if len(new_password) < 8:
-        return Response({"error": "Password harus minimal 8 karakter."}, status=status.HTTP_400_BAD_REQUEST)
-    if not re.search(r'[A-Z]', new_password):
-        return Response({"error": "Password harus mengandung setidaknya satu huruf besar."}, status=status.HTTP_400_BAD_REQUEST)
-    if not re.search(r'[a-z]', new_password):
-        return Response({"error": "Password harus mengandung setidaknya satu huruf kecil."}, status=status.HTTP_400_BAD_REQUEST)
-    if not re.search(r'\d', new_password):
-        return Response({"error": "Password harus mengandung setidaknya satu angka."}, status=status.HTTP_400_BAD_REQUEST)
+#     # Validasi password baru (minimal 8 karakter, ada huruf besar, kecil, angka)
+#     if len(new_password) < 8:
+#         return Response({"error": "Password harus minimal 8 karakter."}, status=status.HTTP_400_BAD_REQUEST)
+#     if not re.search(r'[A-Z]', new_password):
+#         return Response({"error": "Password harus mengandung setidaknya satu huruf besar."}, status=status.HTTP_400_BAD_REQUEST)
+#     if not re.search(r'[a-z]', new_password):
+#         return Response({"error": "Password harus mengandung setidaknya satu huruf kecil."}, status=status.HTTP_400_BAD_REQUEST)
+#     if not re.search(r'\d', new_password):
+#         return Response({"error": "Password harus mengandung setidaknya satu angka."}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Hash password baru sebelum menyimpan ke database
-    user.password = make_password(new_password)
-    user.save()
+#     # Hash password baru sebelum menyimpan ke database
+#     user.password = make_password(new_password)
+#     user.save()
 
-    return Response({"message": "Password berhasil diperbarui"}, status=status.HTTP_200_OK)
+#     return Response({"message": "Password berhasil diperbarui"}, status=status.HTTP_200_OK)
 
 
 @api_view(['PUT'])
