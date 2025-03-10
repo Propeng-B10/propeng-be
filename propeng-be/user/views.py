@@ -299,7 +299,6 @@ def protected_view(request):
         user_data = {
             "user_id": user.id,  # Store the original user ID
             "username": user.username,
-            "email": user.email,
             "role": user.role
         }
 
@@ -310,7 +309,7 @@ def protected_view(request):
                 user_data["name"] = student.name
                 user_data["id"] = student.id  # Use student ID
                 user_data["nisn"] = student.nisn
-                user_data["tahun_ajaran"] = student.tahunAjaran
+                user_data["angkatan"] = student.angkatan
             else:
                 return Response({"error": "Student record not found"}, status=404)
 
@@ -321,6 +320,7 @@ def protected_view(request):
                 user_data["id"] = teacher.id  # Use teacher ID
                 user_data["nisp"] = teacher.nisp
                 user_data["homeroom_id"] = teacher.homeroomId
+                user_data["angkatan"] = teacher.angkatan
             else:
                 return Response({"error": "Teacher record not found"}, status=404)
 
