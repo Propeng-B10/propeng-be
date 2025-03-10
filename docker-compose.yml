@@ -1,0 +1,26 @@
+version: '3'
+
+services:
+  web:
+    build: .
+    container_name: propeng-be_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgres://user:password@db:5432/propeng_db
+
+  db:
+    image: postgres:15
+    container_name: propeng-be_db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: propeng_db
+    ports:
+      - "5432:5432"
