@@ -13,7 +13,8 @@ from rest_framework.views import APIView
 from rest_framework import status, generics
 from .models import Student, Teacher, User
 from kelas.models import Kelas
-
+import re
+from django.contrib.auth.hashers import make_password
 from django.http import JsonResponse
 import json
 import logging
@@ -53,10 +54,15 @@ def list_teacher(request):
             ] 
         }) 
 
+'''
+[PBI 10] Melihat Daftar Akun Pengguna 
+'''
+
 @api_view(['GET'])
 def profile(request, id):
     try:
         akun = User.objects.get(id=id)
+        
         role_akun = akun.role
         is_homeroom = False
         if role_akun == "student":
@@ -67,6 +73,8 @@ def profile(request, id):
                 {
                     "status": 200,
                     "message": "Berhasil mendapatkan info profil",
+                    "id": akun.id,
+                    "student_id": student.id,
                     "role": akun.role,
                     "nama": student.name if student.name else "-",
                     "username": student.username if student.username else "-",
@@ -85,6 +93,8 @@ def profile(request, id):
                 { 
                     "status": 200,
                     "message": "Berhasil mendapatkan informasi profil",
+                    "id": akun.id,
+                    "teacher_id": student.id,
                     "type": "Wali Kelas" if is_homeroom == True else "Guru",
                     "nama": teacher.name if teacher.name else "-",
                     "username": teacher.username if teacher.username else "-",
@@ -100,11 +110,18 @@ def profile(request, id):
                     "message": f"Gagal mendapatkan informasi akun {akun.username}. Role = {akun.role if akun.role else "Belum Diassign. Cek Django Admin"}"
                 }
             )
+    except User.DoesNotExist as e:
+        return JsonResponse(
+                {
+                    "status": 400,
+                    "message": f"Gagal mendapatkan informasi akun. Akun tidak ditemukan",
+                }
+            )
     except Exception as e:
         return JsonResponse(
                 {
                     "status": 400,
-                    "message": f"Gagal mendapatkan informasi akun {akun.username}. Role = {akun.role if akun.role else "Belum Diassign. Cek Django Admin"}. Status {e}",
+                    "message": f"Gagal mendapatkan informasi akun, {akun.username if akun.username else "belum ada akunnya"}. Role = {akun.role if akun.role else "Belum Diassign. Cek Django Admin"}. Status {e}",
                 }
             )
 # Mendapatkan info dropdown list guru aktif
@@ -219,7 +236,7 @@ class RegisterUserView(generics.CreateAPIView):
             user = serializer.save()
             print(user.role)
             print("yang diaatas")
-            if user.role is "student":
+            if user.role == "student":
                 print("printed student")
                 return Response(
                     {"status":201,"message": "User created successfully!", "user_name": Student.objects.filter(user=user).first().name},
@@ -255,6 +272,8 @@ class LoginView(TokenObtainPairView):
 # Refresh Token
 class RefreshTokenView(TokenRefreshView):
     pass
+
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -309,3 +328,64 @@ class logout_view(APIView):
     def post(self, request):
         """Handle logout."""
         return Response({"message": "Logged out successfully"}, status=200)
+    
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated]) 
+def change_password(request):
+    user = request.user
+    old_password = request.data.get("old_password")
+    new_password = request.data.get("new_password")
+
+    # Cek apakah password lama cocok dengan yang di-hash di database
+    if not user.check_password(old_password):
+        return Response({"error": "Password lama salah."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validasi password baru (minimal 8 karakter, ada huruf besar, kecil, angka)
+    if len(new_password) < 8:
+        return Response({"error": "Password harus minimal 8 karakter."}, status=status.HTTP_400_BAD_REQUEST)
+    if not re.search(r'[A-Z]', new_password):
+        return Response({"error": "Password harus mengandung setidaknya satu huruf besar."}, status=status.HTTP_400_BAD_REQUEST)
+    if not re.search(r'[a-z]', new_password):
+        return Response({"error": "Password harus mengandung setidaknya satu huruf kecil."}, status=status.HTTP_400_BAD_REQUEST)
+    if not re.search(r'\d', new_password):
+        return Response({"error": "Password harus mengandung setidaknya satu angka."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Hash password baru sebelum menyimpan ke database
+    user.password = make_password(new_password)
+    user.save()
+
+    return Response({"message": "Password berhasil diperbarui"}, status=status.HTTP_200_OK)
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])  # Admin harus login
+def reset_password(request):
+    if request.user.role != "admin":  # Pastikan hanya admin yang bisa mereset password
+        return Response({"error": "Hanya admin yang bisa mereset password."}, status=status.HTTP_403_FORBIDDEN)
+
+    user_id = request.data.get("user_id")  # ID student/teacher yang mau direset
+    # new_password = request.data.get("new_password")
+    new_password = "SMAKAnglo123"
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"error": "User tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+
+    # Validasi password baru (minimal 8 karakter, ada huruf besar, kecil, angka)
+    if len(new_password) < 8:
+        return Response({"error": "Password harus minimal 8 karakter."}, status=status.HTTP_400_BAD_REQUEST)
+    if not re.search(r'[A-Z]', new_password):
+        return Response({"error": "Password harus mengandung setidaknya satu huruf besar."}, status=status.HTTP_400_BAD_REQUEST)
+    if not re.search(r'[a-z]', new_password):
+        return Response({"error": "Password harus mengandung setidaknya satu huruf kecil."}, status=status.HTTP_400_BAD_REQUEST)
+    if not re.search(r'\d', new_password):
+        return Response({"error": "Password harus mengandung setidaknya satu angka."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Hash password baru sebelum menyimpan ke database
+    user.password = make_password(new_password)
+    user.save()
+
+    return Response({"message": f"Password untuk {user.username} berhasil diperbarui"}, status=status.HTTP_200_OK)

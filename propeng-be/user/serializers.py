@@ -3,7 +3,8 @@ from rest_framework import serializers
 from django.contrib.auth.hashers import make_password
 from .models import User, Student, Teacher, TahunAjaran
 from django.contrib.auth import get_user_model
-
+import re
+from django.contrib.auth.hashers import make_password
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
@@ -15,18 +16,19 @@ class UserSerializer(serializers.ModelSerializer):
     nomorinduk = serializers.CharField(write_only=True)  # Custom field for NISN/NISP
     tahunAjaran = serializers.IntegerField(write_only=True, required=False)
     name = serializers.CharField(write_only=True, required=False)
+    username = serializers.CharField(write_only=True, required=True)
     class Meta:
         model = User
-        fields = ['name', 'username', 'email', 'password', 'role', 'nomorinduk', 'tahunAjaran']
+        fields = ['username','name',  'email', 'password', 'role', 'nomorinduk', 'tahunAjaran']
         extra_kwargs = {'password': {'write_only': True}}  # Hide password in responses
     
 
     def create(self, validated_data):
         print(validated_data)
         role = validated_data.pop('role')
-        name = validated_data.pop("name")
+        name = validated_data.pop('name')
         nomorinduk = validated_data.pop('nomorinduk', None)
-        tahunAjaran = validated_data.pop("tahunAjaran", None) if role == "student" else None
+        tahunAjaran = validated_data.pop('tahunAjaran', None) if role == "student" else None
         try:
             nomorinduk = int(nomorinduk)
         except:
@@ -59,12 +61,13 @@ class UserSerializer(serializers.ModelSerializer):
             tahun_ajaran_instance, created = TahunAjaran.objects.get_or_create(tahunAjaran=tahunAjaran)
 
             # Buat Student dengan instance TahunAjaran
-            Student.objects.create(user=user, nisn=nomorinduk, name=name, tahunAjaran=tahun_ajaran_instance)
+            Student.objects.create(user=user, nisn=nomorinduk, username=user.username, name=name, tahunAjaran=tahun_ajaran_instance)
 
         elif role == "teacher":
             if Teacher.objects.filter(nisp=nomorinduk).exists():
                 user.delete()
                 raise serializers.ValidationError({"status":"400","Message":"Teacher with that NISP numbers already exist"})
-            Teacher.objects.create(user=user, nisp=nomorinduk, name=name)
+            Teacher.objects.create(user=user, nisp=nomorinduk, username=user.username, name=name)
             
         return user
+
