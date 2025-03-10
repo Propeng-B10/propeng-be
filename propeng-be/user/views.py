@@ -121,7 +121,7 @@ def profile(request, id):
         return JsonResponse(
                 {
                     "status": 400,
-                    "message": f"Gagal mendapatkan informasi akun, {akun.username if akun.username else "belum ada akunnya"}. Role = {akun.role if akun.role else 'Belum Diassign. Cek Django Admin'}. Status {e}",
+                    "message": f"Gagal mendapatkan informasi akun, {akun.username if akun.username else 'belum ada akunnya'}. Role = {akun.role if akun.role else 'Belum Diassign. Cek Django Admin'}. Status {e}",
                 }
             )
 # Mendapatkan info dropdown list guru aktif
