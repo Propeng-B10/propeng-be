@@ -26,7 +26,7 @@ class Student(models.Model):
     updatedAt = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.user.username} - Student"
+        return f"{self.user.username}"
 
 class Teacher(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -40,4 +40,4 @@ class Teacher(models.Model):
     updatedAt = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.user.username} - Teacher"
+        return f"{self.user.username}"

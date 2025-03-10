@@ -9,5 +9,6 @@ urlpatterns = [
     path('list_teacher/', list_teacher, name="list_teacher"),
     path('list_active_teacher/', list_active_teacher, name="list_active_teacher"),
     path('list_student/', list_student, name="list_student"),
-    path('list_active_student/', list_active_student, name="list_active_student")
+    path('list_active_student/', list_active_student, name="list_active_student"),
+    path('profile/<int:id>/', profile, name="profile")
 ]

@@ -53,6 +53,60 @@ def list_teacher(request):
             ] 
         }) 
 
+@api_view(['GET'])
+def profile(request, id):
+    try:
+        akun = User.objects.get(id=id)
+        role_akun = akun.role
+        is_homeroom = False
+        if role_akun == "student":
+            student = Student.objects.get(username=akun.username)
+            kelas = Kelas.objects.filter(siswa=student)
+            namaKelas = kelas.first().namaKelas if kelas.exists() else "Belum Terdaftar"
+            return JsonResponse(
+                {
+                    "status": 200,
+                    "message": "Berhasil mendapatkan info profil",
+                    "role": akun.role,
+                    "nama": student.name if student.name else "-",
+                    "username": student.username if student.username else "-",
+                    "kelas": namaKelas if kelas.exists() else "-",
+                    "nisn": student.nisn if student.nisn else "-",
+
+                }
+            )
+        if role_akun == "teacher":
+            teacher = Teacher.objects.get(username=akun.username)
+            if teacher.homeroomId != None:
+                is_homeroom = True
+                kelas = Kelas.objects.filter(waliKelas=teacher)
+                namaKelas = kelas.first().namaKelas if kelas.exists() else "Belum Terdaftar"
+            return JsonResponse(
+                { 
+                    "status": 200,
+                    "message": "Berhasil mendapatkan informasi profil",
+                    "type": "Wali Kelas" if is_homeroom == True else "Guru",
+                    "nama": teacher.name if teacher.name else "-",
+                    "username": teacher.username if teacher.username else "-",
+                    "kelas": namaKelas if namaKelas else "-",
+                    "nisn": teacher.nisp if teacher.nisp else "-"
+                    
+                }
+            )
+        else :
+            return JsonResponse(
+                {
+                    "status": 400,
+                    "message": f"Gagal mendapatkan informasi akun {akun.username}. Role = {akun.role if akun.role else "Belum Diassign. Cek Django Admin"}"
+                }
+            )
+    except Exception as e:
+        return JsonResponse(
+                {
+                    "status": 400,
+                    "message": f"Gagal mendapatkan informasi akun {akun.username}. Role = {akun.role if akun.role else "Belum Diassign. Cek Django Admin"}. Status {e}",
+                }
+            )
 # Mendapatkan info dropdown list guru aktif
 @api_view(['GET'])
 def list_active_teacher(request):
