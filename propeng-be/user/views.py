@@ -149,7 +149,7 @@ def profile(request, id):
 def list_active_teacher(request):
     """List only active teachers (not deleted)"""
     try:
-        teachers = Teacher.objects.filter(status="Active")
+        teachers = Teacher.objects.filter(isDeleted=False)
         teacher_list = []
         
         for teacher in teachers:
@@ -214,7 +214,7 @@ def list_student(request):
 def list_active_student(request):
     """List only active students (not deleted)"""
     try:
-        students = Student.objects.filter(status="Active")
+        students = Student.objects.filter(isDeleted=False)
         student_list = []
         
         for student in students:
