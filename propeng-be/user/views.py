@@ -54,7 +54,7 @@ def list_teacher(request):
             teacher_data = {
                 "id": teacher.user_id,
                 "name": teacher.name,
-                "username": teacher.username,  # Using synchronized username
+                "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
                 "homeroomId": teacher.homeroomId,
                 "angkatan": teacher.angkatan,
@@ -156,7 +156,7 @@ def list_active_teacher(request):
             teacher_data = {
                 "id": teacher.user_id,
                 "name": teacher.name,
-                "username": teacher.username,  # Using synchronized username
+                "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
                 "homeroomId": teacher.homeroomId,
                 "angkatan": teacher.angkatan,
@@ -189,7 +189,7 @@ def list_student(request):
             student_data = {
                 "id": student.user_id,
                 "name": student.name,
-                "username": student.username,  # Using synchronized username
+                "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
                 "angkatan": student.angkatan,
                 "status": "Deleted" if student.isDeleted else "Active"
@@ -221,7 +221,7 @@ def list_active_student(request):
             student_data = {
                 "id": student.user_id,
                 "name": student.name,
-                "username": student.username,  # Using synchronized username
+                "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
                 "angkatan": student.angkatan,
                 "status": "Active"
