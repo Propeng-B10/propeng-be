@@ -41,6 +41,8 @@ class ChangePasswordView(APIView):
 [PBI 2] Melihat Daftar Akun Pengguna 
 '''
 
+
+
 # Mendapatkan info dropdown list semua guru (aktif dan tidak)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -75,7 +77,7 @@ def list_teacher(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 '''
-[PBI 10] Melihat Daftar Akun Pengguna 
+[PBI 2] Melihat Daftar Akun Pengguna 
 '''
 
 @api_view(['GET'])

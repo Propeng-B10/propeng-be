@@ -332,6 +332,12 @@ def delete_kelas(request, kelas_id):
 
         # Set isActive menjadi False (Soft Delete)
         kelas.isActive = False
+
+        wali_kelas = kelas.waliKelas
+        if wali_kelas and wali_kelas.homeroomId == kelas.id:
+            wali_kelas.homeroomId = None
+        wali_kelas.save()
+
         kelas.save()
 
         return JsonResponse({

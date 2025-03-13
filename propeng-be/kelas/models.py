@@ -19,4 +19,4 @@ class Kelas(models.Model):
         related_name='siswa'
     )
     createdAt = models.DateTimeField(default=timezone.now)  
-    updatedAt = models.DateTimeField(auto_now=True) 
+    updatedAt = models.DateTimeField(auto_now=True)
