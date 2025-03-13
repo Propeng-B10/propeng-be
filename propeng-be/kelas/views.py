@@ -146,7 +146,7 @@ def list_kelas(request):
                 "isActive": k.isActive,
                 "siswa": [
                     {
-                        "id": s.id,
+                        "id": s.user.id,
                         "name": s.name,
                         "nisn": s.nisn,
                         "username": s.username,
@@ -191,7 +191,7 @@ def detail_kelas(request, kelas_id):
             "isActive": kelas.isActive,
             "siswa": [
                     {
-                        "id": s.id,
+                        "id": s.user.id,
                         "name": s.name,
                         "nisn": s.nisn,
                         "username": s.username,
@@ -221,7 +221,7 @@ def detail_kelas(request, kelas_id):
             "isActive": kelas.isActive,
             "siswa": [
                     {
-                        "id": s.id,
+                        "id": s.user.id,
                         "name": s.name,
                         "nisn": s.nisn,
                         "username": s.username,
@@ -249,7 +249,7 @@ def detail_kelas(request, kelas_id):
             "isActive": kelas.isActive,
             "siswa": [
                     {
-                        "id": s.id,
+                        "id": s.user.id,
                         "name": s.name,
                         "nisn": s.nisn,
                         "username": s.username,
