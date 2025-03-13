@@ -10,13 +10,13 @@ class Kelas(models.Model):
     isActive = models.BooleanField(default=True)            # Defaultnya aktif 
     waliKelas = models.ForeignKey(
         Teacher,
-        related_name= "waliKelas",                          
-        on_delete= models.SET_NULL,                         # Wali Kelas jika didelete set null (soft delete)
-        null= True                                
+        related_name='waliKelas',
+        on_delete=models.SET_NULL,
+        null=True
     )
     siswa = models.ManyToManyField(
         Student,
-        related_name= "siswa",
+        related_name='siswa'
     )
     createdAt = models.DateTimeField(default=timezone.now)  
     updatedAt = models.DateTimeField(auto_now=True) 

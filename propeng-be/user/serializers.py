@@ -80,7 +80,7 @@ class UserSerializer(serializers.ModelSerializer):
                 # default, need further discussion
                 email=validated_data['username'],
                 role=role,
-                password=make_password(validated_data['password'])  # Hash password
+                password=validated_data['password']  # Hash password
             )
         except:
             raise serializers.ValidationError({"status":"400","Message":"User with that username credentials is already here"})

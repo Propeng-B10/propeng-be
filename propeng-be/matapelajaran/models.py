@@ -1,8 +1,10 @@
 from django.db import models
 from user.models import Teacher, Student
 from tahunajaran.models import TahunAjaran
+import uuid
 
-class MataPelajaran(models.Model):  # Renamed from User to MataPelajaran
+class MataPelajaran(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # Add UUID field
     MATKUL_CHOICES = [
         ("BING_WAJIB", "Bahasa Inggris Wajib"),
         ("BING_PEMINATAN", "Bahasa Inggris Peminatan"),
@@ -14,28 +16,28 @@ class MataPelajaran(models.Model):  # Renamed from User to MataPelajaran
     ]
 
     nama = models.TextField(max_length=100)
-    kategoriMatpel = models.CharField(max_length=50,choices=MATKUL_CHOICES)
+    kategoriMatpel = models.CharField(max_length=50, choices=MATKUL_CHOICES)
     kode = models.CharField(max_length=20, unique=True, blank=True)
     kelas = models.IntegerField()
-    tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)  # Ensure integer type for better handling
+    tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)
 
     teacher = models.ForeignKey(
         Teacher, 
         on_delete=models.SET_NULL, 
-        null=True,  # Fixed issue (must allow null)
-        related_name="matapelajaran_diajarkan"  # Avoid reverse query conflict
+        null=True,
+        related_name="matapelajaran_diajarkan"
     )
 
     siswa_terdaftar = models.ManyToManyField(
         Student, 
         blank=True, 
-        related_name="matapelajaran_diikuti"  # Avoid reverse query conflict
+        related_name="matapelajaran_diikuti"
     )
 
-    is_archived = models.BooleanField(default=False)  # Use a better name for expiry
+    is_archived = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = ('kategoriMatpel', 'kelas', 'tahunAjaran') 
+        unique_together = ('kategoriMatpel', 'kelas', 'tahunAjaran')
 
     def save(self, *args, **kwargs):
         if not self.kode:  # Auto-generate kode if not provided

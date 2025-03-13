@@ -21,6 +21,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class ChangePasswordView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -42,185 +43,202 @@ class ChangePasswordView(APIView):
 
 # Mendapatkan info dropdown list semua guru (aktif dan tidak)
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def list_teacher(request):
-    teacher = Teacher.objects.all().order_by('-updatedAt')
-
-    if not teacher.exists():
-        return JsonResponse({
-            "status":400, 
-            "message":"Belum ada guru yang ditambahkan", 
-            }) 
-    return JsonResponse({
-        "status":200, 
-        "message":"Sukses menampilkan list guru", 
-        "data": 
-            [
-                {
-                    "id": t.id,
-                    "name": t.name,
-                    "nisp": t.nisp,
-                    "username": t.username,
-                    "waliKelas": Kelas.objects.filter(waliKelas_id=t.id).values_list("namaKelas", flat=True).first() or "",
-                    "createdAt": t.createdAt,
-                    "updatedAt": t.updatedAt
-                } for t in teacher
-
-            ] 
-        }) 
+    """List all teachers, including both active and deleted"""
+    try:
+        teachers = Teacher.objects.all()
+        teacher_list = []
+        
+        for teacher in teachers:
+            teacher_data = {
+                "id": teacher.user_id,
+                "name": teacher.name,
+                "username": teacher.username,  # Using synchronized username
+                "nisp": teacher.nisp,
+                "homeroomId": teacher.homeroomId,
+                "angkatan": teacher.angkatan,
+                "status": "Deleted" if teacher.isDeleted else "Active"
+            }
+            teacher_list.append(teacher_data)
+            
+        return Response({
+            "status": 200,
+            "message": "Successfully retrieved teacher list",
+            "data": teacher_list
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error retrieving teacher list: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 '''
 [PBI 10] Melihat Daftar Akun Pengguna 
 '''
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def profile(request, id):
+    """Get detailed profile information for a user"""
     try:
-        akun = User.objects.get(id=id)
+        user = User.objects.get(id=id)
         
-        role_akun = akun.role
-        is_homeroom = False
-        if role_akun == "student":
-            student = Student.objects.get(username=akun.username)
-            kelas = Kelas.objects.filter(siswa=student)
-            namaKelas = kelas.first().namaKelas if kelas.exists() else "Belum Terdaftar"
-            return JsonResponse(
-                {
-                    "status": 200,
-                    "message": "Berhasil mendapatkan info profil",
-                    "id": akun.id,
-                    "student_id": student.id,
-                    "role": akun.role,
-                    "nama": student.name if student.name else "-",
-                    "username": student.username if student.username else "-",
-                    "kelas": namaKelas if kelas.exists() else "-",
-                    "nisn": student.nisn if student.nisn else "-",
-
-                }
-            )
-        if role_akun == "teacher":
-            teacher = Teacher.objects.get(username=akun.username)
-            if teacher.homeroomId != None:
-                is_homeroom = True
-                kelas = Kelas.objects.filter(waliKelas=teacher)
-                namaKelas = kelas.first().namaKelas if kelas.exists() else "Belum Terdaftar"
-            return JsonResponse(
-                { 
-                    "status": 200,
-                    "message": "Berhasil mendapatkan informasi profil",
-                    "id": akun.id,
-                    "teacher_id": student.id,
-                    "type": "Wali Kelas" if is_homeroom == True else "Guru",
-                    "nama": teacher.name if teacher.name else "-",
-                    "username": teacher.username if teacher.username else "-",
-                    "kelas": namaKelas if namaKelas else "-",
-                    "nisn": teacher.nisp if teacher.nisp else "-"
-                    
-                }
-            )
-        else :
-            return JsonResponse(
-                {
-                    "status": 400,
-                    "message": f"Gagal mendapatkan informasi akun {akun.username}. Role = {akun.role if akun.role else 'Belum Diassign. Cek Django Admin'}"
-                }
-            )
-    except User.DoesNotExist as e:
-        return JsonResponse(
-                {
-                    "status": 400,
-                    "message": f"Gagal mendapatkan informasi akun. Akun tidak ditemukan",
-                }
-            )
+        # Initialize base profile data
+        profile_data = {
+            "user_id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role
+        }
+        
+        # Add role-specific data
+        if user.role == "student":
+            student = Student.objects.filter(user=user).first()
+            if student:
+                profile_data.update({
+                    "name": student.name,
+                    "nisn": student.nisn,
+                    "angkatan": student.angkatan,
+                    "status": "Deleted" if student.isDeleted else "Active"
+                })
+            else:
+                return Response({
+                    "status": 404,
+                    "message": "Student profile not found"
+                }, status=status.HTTP_404_NOT_FOUND)
+                
+        elif user.role == "teacher":
+            teacher = Teacher.objects.filter(user=user).first()
+            if teacher:
+                profile_data.update({
+                    "name": teacher.name,
+                    "nisp": teacher.nisp,
+                    "homeroomId": teacher.homeroomId,
+                    "angkatan": teacher.angkatan,
+                    "status": "Deleted" if teacher.isDeleted else "Active"
+                })
+            else:
+                return Response({
+                    "status": 404,
+                    "message": "Teacher profile not found"
+                }, status=status.HTTP_404_NOT_FOUND)
+                
+        return Response({
+            "status": 200,
+            "message": "Successfully retrieved user profile",
+            "data": profile_data
+        }, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        return Response({
+            "status": 404,
+            "message": f"User with ID {id} not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+        
     except Exception as e:
-        return JsonResponse(
-                {
-                    "status": 400,
-                    "message": f"Gagal mendapatkan informasi akun, {akun.username if akun.username else 'belum ada akunnya'}. Role = {akun.role if akun.role else 'Belum Diassign. Cek Django Admin'}. Status {e}",
-                }
-            )
+        return Response({
+            "status": 500,
+            "message": f"Error retrieving user profile: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 # Mendapatkan info dropdown list guru aktif
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def list_active_teacher(request):
-    active_teacher = Teacher.objects.all().filter(isDeleted=False)
-    teacher = active_teacher.order_by('-updatedAt')
-
-    if not teacher.exists():
-        return JsonResponse({
-            "status":400, 
-            "message":"Belum ada guru yang ditambahkan", 
-            }) 
-    return JsonResponse({
-        "status":200, 
-        "message":"Sukses menampilkan list guru", 
-        "data": 
-            [
-                {
-                    "id": t.id,
-                    "name": t.name,
-                    "nisp": t.nisp,
-                    "username": t.username,
-                    "waliKelas": Kelas.objects.filter(waliKelas_id=t.id).values_list("namaKelas", flat=True).first() or "",
-                    "createdAt": t.createdAt,
-                    "updatedAt": t.updatedAt
-                } for t in teacher
-
-            ] 
-        }) 
+    """List only active teachers (not deleted)"""
+    try:
+        teachers = Teacher.objects.filter(isDeleted=False)
+        teacher_list = []
+        
+        for teacher in teachers:
+            teacher_data = {
+                "id": teacher.user_id,
+                "name": teacher.name,
+                "username": teacher.username,  # Using synchronized username
+                "nisp": teacher.nisp,
+                "homeroomId": teacher.homeroomId,
+                "angkatan": teacher.angkatan,
+                "status": "Active"
+            }
+            teacher_list.append(teacher_data)
+            
+        return Response({
+            "status": 200,
+            "message": "Successfully retrieved active teacher list",
+            "data": teacher_list
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error retrieving active teacher list: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Mendapatkan info dropdown list semua murid (aktif dan tidak)
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def list_student(request):
-    student = Student.objects.select_related("tahunAjaran").all().order_by('-updatedAt')
-
-    if not student.exists():
-        return JsonResponse({
-            "status":400, 
-            "message":"Belum ada murid yang ditambahkan", 
-            }) 
-    return JsonResponse({
-        "status":200, 
-        "message":"Sukses menampilkan list murid", 
-        "data": 
-            [
-                {
-                    "id": s.id,
-                    "name": s.name,
-                    "nisn": s.nisn,
-                    "username": s.username,
-                    "tahunAjaran": s.tahunAjaran.tahunAjaran,
-                    "createdAt": s.createdAt,
-                    "updatedAt": s.updatedAt
-                } for s in student
-            ] 
-        }) 
+    """List all students, including both active and deleted"""
+    try:
+        students = Student.objects.all()
+        student_list = []
+        
+        for student in students:
+            student_data = {
+                "id": student.user_id,
+                "name": student.name,
+                "username": student.username,  # Using synchronized username
+                "nisn": student.nisn,
+                "angkatan": student.angkatan,
+                "status": "Deleted" if student.isDeleted else "Active"
+            }
+            student_list.append(student_data)
+            
+        return Response({
+            "status": 200,
+            "message": "Successfully retrieved student list",
+            "data": student_list
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error retrieving student list: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Mendapatkan info dropdown list murid aktif
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def list_active_student(request):
-    active_student = Student.objects.select_related("tahunAjaran").all().filter(isDeleted=False)
-    student = active_student.order_by('-updatedAt')
-
-    if not student.exists():
-        return JsonResponse({
-            "status":400, 
-            "message":"Belum ada murid yang ditambahkan", 
-            }) 
-    return JsonResponse({
-        "status":200, 
-        "message":"Sukses menampilkan list murid", 
-        "data": 
-            [
-                {
-                    "id": s.id,
-                    "name": s.name,
-                    "nisn": s.nisn,
-                    "username": s.username,
-                    "tahunAjaran": s.tahunAjaran.tahunAjaran,
-                    "createdAt": s.createdAt,
-                    "updatedAt": s.updatedAt
-                } for s in student
-            ] 
-        }) 
+    """List only active students (not deleted)"""
+    try:
+        students = Student.objects.filter(isDeleted=False)
+        student_list = []
+        
+        for student in students:
+            student_data = {
+                "id": student.user_id,
+                "name": student.name,
+                "username": student.username,  # Using synchronized username
+                "nisn": student.nisn,
+                "angkatan": student.angkatan,
+                "status": "Active"
+            }
+            student_list.append(student_data)
+            
+        return Response({
+            "status": 200,
+            "message": "Successfully retrieved active student list",
+            "data": student_list
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error retrieving active student list: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class IsAdminRole(BasePermission):
     """
@@ -307,7 +325,7 @@ def protected_view(request):
             student = Student.objects.filter(user=user).first()
             if student:
                 user_data["name"] = student.name
-                user_data["id"] = student.id  # Use student ID
+                user_data["id"] = student.user_id  # Use student ID
                 user_data["nisn"] = student.nisn
                 user_data["angkatan"] = student.angkatan
             else:
@@ -317,7 +335,7 @@ def protected_view(request):
             teacher = Teacher.objects.filter(user=user).first()
             if teacher:
                 user_data["name"] = teacher.name
-                user_data["id"] = teacher.id  # Use teacher ID
+                user_data["id"] = teacher.user_id  # Use teacher ID
                 user_data["nisp"] = teacher.nisp
                 user_data["homeroom_id"] = teacher.homeroomId
                 user_data["angkatan"] = teacher.angkatan
@@ -404,3 +422,212 @@ def reset_password(request):
     user.save()
 
     return Response({"message": f"Password untuk {user.username} berhasil diperbarui"}, status=status.HTTP_200_OK)
+
+# Update and delete user
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated, IsAdminRole])
+def delete_user(request, id):
+    """Soft delete a user by setting isDeleted to True"""
+    try:
+        user = User.objects.get(id=id)
+        
+        if user.role == "student":
+            student = Student.objects.filter(user=user).first()
+            if student:
+                student.isDeleted = True
+                student.save()
+                return Response({
+                    "status": 200,
+                    "message": f"Student {student.name} (NISN: {student.nisn}) has been successfully deleted",
+                    "detail": {
+                        "student_id": student.user_id,
+                        "username": user.username,
+                        "name": student.name,
+                        "nisn": student.nisn
+                    }
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    "status": 404,
+                    "message": f"Student record not found for user {user.username} (User ID: {user.id})"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+        elif user.role == "teacher":
+            teacher = Teacher.objects.filter(user=user).first()
+            if teacher:
+                # Check if teacher is a wali kelas
+                if teacher.homeroomId:
+                    return Response({
+                        "status": 400,
+                        "message": f"Cannot delete teacher {teacher.name} as they are currently assigned as a wali kelas. Please reassign or remove their wali kelas role first."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                teacher.isDeleted = True
+                teacher.save()
+                return Response({
+                    "status": 200,
+                    "message": f"Teacher {teacher.name} (NISP: {teacher.nisp}) has been successfully deleted",
+                    "detail": {
+                        "user_id": user.id,
+                        "teacher_id": teacher.user_id,
+                        "username": user.username,
+                        "name": teacher.name,
+                        "nisp": teacher.nisp
+                    }
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    "status": 404,
+                    "message": f"Teacher record not found for user {user.username} (User ID: {user.id})"
+                }, status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response({
+                "status": 400,
+                "message": "Cannot delete admin users"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    except User.DoesNotExist:
+        return Response({
+            "status": 404,
+            "message": f"User with ID {id} not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error deleting user: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated, IsAdminRole])
+def edit_user(request, id):
+    try:
+        user = User.objects.get(id=id)
+        original_data = {
+            "user_id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role
+        }
+        
+        data = request.data
+        updated_fields = []
+
+        if "username" in data and data["username"] != user.username:
+            updated_fields.append("username")
+            user.username = data["username"]
+        if "email" in data and data["email"] != user.email:
+            updated_fields.append("email")
+            user.email = data["email"]
+        if "role" in data and data["role"] != user.role:
+            return Response({
+                "status": 400,
+                "message": "Tidak dapat mengubah role user. Silakan hapus user dan buat baru dengan role yang sesuai."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if user.role == "student":
+            student = Student.objects.filter(user=user).first()
+            if student:
+                original_data.update({
+                    "student_id": student.user_id,
+                    "name": student.name,
+                    "nisn": student.nisn,
+                    "status": "Deleted" if student.isDeleted else "Active"
+                })
+                
+                if "name" in data and data["name"] != student.name:
+                    updated_fields.append("name")
+                    student.name = data["name"]
+                if "nisn" in data and data["nisn"] != student.nisn:
+                    # Check if NISN already exists for another student
+                    if Student.objects.filter(nisn=data["nisn"]).exclude(user_id=user.id).exists():
+                        return Response({
+                            "status": 400,
+                            "message": f"NISN {data['nisn']} sudah digunakan oleh siswa lain"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    updated_fields.append("nisn")
+                    student.nisn = data["nisn"]
+                
+                student.save()
+            else:
+                return Response({
+                    "status": 404,
+                    "message": f"Student record not found for user {user.username} (User ID: {user.id})"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+        elif user.role == "teacher":
+            teacher = Teacher.objects.filter(user=user).first()
+            if teacher:
+                original_data.update({
+                    "teacher_id": teacher.user_id,
+                    "name": teacher.name,
+                    "nisp": teacher.nisp,
+                    "status": "Deleted" if teacher.isDeleted else "Active"
+                })
+                
+                if "name" in data and data["name"] != teacher.name:
+                    updated_fields.append("name")
+                    teacher.name = data["name"]
+                if "nisp" in data and data["nisp"] != teacher.nisp:
+                    # Check if NISP already exists for another teacher
+                    if Teacher.objects.filter(nisp=data["nisp"]).exclude(user_id=user.id).exists():
+                        return Response({
+                            "status": 400,
+                            "message": f"NISP {data['nisp']} sudah digunakan oleh guru lain"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    updated_fields.append("nisp")
+                    teacher.nisp = data["nisp"]
+                
+                teacher.save()
+            else:
+                return Response({
+                    "status": 404,
+                    "message": f"Teacher record not found for user {user.username} (User ID: {user.id})"
+                }, status=status.HTTP_404_NOT_FOUND)
+        
+        user.save()
+        
+        response_data = {
+            "original_data": original_data,
+            "updated_fields": updated_fields,
+            "current_data": {
+                "user_id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role
+            }
+        }
+        
+        if user.role == "student" and student:
+            response_data["current_data"].update({
+                "student_id": student.user_id,
+                "name": student.name,
+                "nisn": student.nisn,
+                "status": "Deleted" if student.isDeleted else "Active"
+            })
+        elif user.role == "teacher" and teacher:
+            response_data["current_data"].update({
+                "teacher_id": teacher.user_id,
+                "name": teacher.name,
+                "nisp": teacher.nisp,
+                "status": "Deleted" if teacher.isDeleted else "Active"
+            })
+
+        return Response({
+            "status": 200,
+            "message": f"User berhasil diperbarui (field yang diubah: {', '.join(updated_fields)})",
+            "detail": response_data
+        }, status=status.HTTP_200_OK)
+
+    except User.DoesNotExist:
+        return Response({
+            "status": 404,
+            "message": f"User with ID {id} not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error updating user: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# End update and delete user

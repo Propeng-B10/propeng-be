@@ -2,65 +2,217 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from .models import MataPelajaran, TahunAjaran
+from .models import MataPelajaran, TahunAjaran, Teacher, Student
 from .serializers import MataPelajaranSerializer
+from user.models import User
+from django.db import connection
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_mata_pelajaran(request):
-
-    tahun_ajaran, created = TahunAjaran.objects.get_or_create(
-    tahunAjaran=request.data["tahunAjaran"])
-    request.data["tahunAjaran"] = tahun_ajaran.id 
-
+    print("🔹 create_mata_pelajaran 1")
+    
     serializer = MataPelajaranSerializer(data=request.data)
+    
     if serializer.is_valid():
-        serializer.save()
-        return Response(
-                    {"status":201,"message": "Matpel created successfully!", "Data": serializer.data},
-                    status=status.HTTP_201_CREATED
-                )
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        try:
+            matapelajaran = serializer.save()
+            return Response({
+                "status": 201,
+                "message": "Matpel created successfully!",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({
+                "status": 400,
+                "message": f"Failed to create Mata Pelajaran: {str(e)}",
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
     else:
-        return Response({"status":200,"message": "Unsuccessful!","error": serializer.errors})
+        return Response({
+            "status": 400,
+            "message": "Validation failed",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def list_mata_pelajaran(request):
-    """Mengambil Semua MataPelajaran"""
-    mata_pelajaran = MataPelajaran.objects.all()
-    serializer = MataPelajaranSerializer(mata_pelajaran, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
-
+def list_matapelajaran(request):
+    """List all mata pelajaran, including both archived and active"""
+    try:
+        matapelajaran = MataPelajaran.objects.all()
+        matapelajaran_list = []
+        
+        for mapel in matapelajaran:
+            # Get teacher name if assigned
+            teacher_name = mapel.teacher.name if mapel.teacher else None
+            
+            # Count enrolled students
+            student_count = mapel.siswa_terdaftar.count()
+            
+            mapel_data = {
+                "id": mapel.id,
+                "nama": mapel.nama,
+                "kategoriMatpel": mapel.get_kategoriMatpel_display(),  # Get readable choice name
+                "kode": mapel.kode,
+                "kelas": mapel.kelas,
+                "tahunAjaran": mapel.tahunAjaran.tahunAjaran if mapel.tahunAjaran else None,
+                "teacher": {
+                    "id": mapel.teacher.user_id if mapel.teacher else None,
+                    "name": teacher_name
+                },
+                "jumlah_siswa": student_count,
+                "status": "Archived" if mapel.is_archived else "Active"
+            }
+            matapelajaran_list.append(mapel_data)
+            
+        return Response({
+            "status": 200,
+            "message": "Successfully retrieved mata pelajaran list",
+            "data": matapelajaran_list
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error retrieving mata pelajaran list: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def update_mata_pelajaran(request, pk):
-    """Memodifikasi MataPelajaran"""
+    """Update an existing MataPelajaran"""
     try:
-        mata_pelajaran = MataPelajaran.objects.get(pk=pk)
+        matapelajaran = MataPelajaran.objects.get(pk=pk)
     except MataPelajaran.DoesNotExist:
-        return Response({"status":404,"message": "MataPelajaran not found"}, status=status.HTTP_404_NOT_FOUND)
-
-    tahun_ajaran, created = TahunAjaran.objects.get_or_create(
-        tahunAjaran=request.data["tahunAjaran"])
-    request.data["tahunAjaran"] = tahun_ajaran.id 
-        
-    serializer = MataPelajaranSerializer(mata_pelajaran, data=request.data, partial=True)  # partial=True agar tidak wajib semua field dikirim
+        return Response({
+            "status": 404,
+            "message": "MataPelajaran not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Create a copy of the request data
+    data = request.data.copy()
+    
+    # Handle partial updates (PATCH)
+    partial = request.method == 'PATCH'
+    
+    # Process tahunAjaran if provided
+    if 'tahunAjaran' in data:
+        tahun = data.get('tahunAjaran')
+        try:
+            tahun_ajaran, created = TahunAjaran.objects.get_or_create(tahunAjaran=tahun)
+            # For validation in the serializer
+            data['tahunAjaran_instance'] = tahun_ajaran.id
+        except Exception as e:
+            return Response({
+                "status": 400,
+                "message": f"Error with TahunAjaran: {str(e)}",
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Create serializer with the instance and data
+    serializer = MataPelajaranSerializer(matapelajaran, data=data, partial=partial)
+    
     if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            updated_matapelajaran = serializer.save()
+            
+            # Prepare response
+            return Response({
+                "status": 200,
+                "message": "MataPelajaran updated successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({
+                "status": 400,
+                "message": f"Failed to update MataPelajaran: {str(e)}",
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        return Response({
+            "status": 400,
+            "message": "Validation failed",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def delete_mata_pelajaran(request, pk):
-    """Menghapus MataPelajaran"""
+    """Delete an existing MataPelajaran"""
     try:
-        mata_pelajaran = MataPelajaran.objects.get(pk=pk)
+        matapelajaran = MataPelajaran.objects.get(pk=pk)
     except MataPelajaran.DoesNotExist:
-        return Response({"status":404,"error": "MataPelajaran not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            "status": 404,
+            "message": "MataPelajaran not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    try:
+        # Store information for response before deletion
+        matapelajaran_info = {
+            "id": matapelajaran.id,
+            "nama": matapelajaran.nama,
+            "kategoriMatpel": matapelajaran.get_kategoriMatpel_display(),
+            "kelas": matapelajaran.kelas,
+            "tahunAjaran": matapelajaran.tahunAjaran.tahunAjaran if matapelajaran.tahunAjaran else None
+        }
+        
+        # Delete the MataPelajaran
+        matapelajaran.delete()
+        
+        # Return success response with deleted item info
+        return Response({
+            "status": 200,
+            "message": "MataPelajaran deleted successfully",
+            "deleted_item": matapelajaran_info
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            "status": 400,
+            "message": f"Failed to delete MataPelajaran: {str(e)}",
+            "error": str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
-    mata_pelajaran.delete()
-    return Response({"status":404,"message": "MataPelajaran deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def archive_mata_pelajaran(request, pk):
+    """Archive an existing MataPelajaran instead of deleting it"""
+    try:
+        matapelajaran = MataPelajaran.objects.get(pk=pk)
+    except MataPelajaran.DoesNotExist:
+        return Response({
+            "status": 404,
+            "message": "MataPelajaran not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    try:
+        # Archive the MataPelajaran
+        matapelajaran.is_archived = True
+        matapelajaran.save()
+        
+        # Return success response
+        return Response({
+            "status": 200,
+            "message": "MataPelajaran archived successfully",
+            "data": MataPelajaranSerializer(matapelajaran).data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            "status": 400,
+            "message": f"Failed to archive MataPelajaran: {str(e)}",
+            "error": str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)

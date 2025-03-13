@@ -1,43 +1,199 @@
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from rest_framework import serializers
 from .models import MataPelajaran
-from user.models import Teacher, Student
+from user.models import Teacher, Student, User
+from tahunajaran.models import TahunAjaran
 
 class MataPelajaranSerializer(serializers.ModelSerializer):
+    print("🔹 MataPelajaranSerializer")
+    id = serializers.UUIDField(read_only=True)
     kategoriMatpel = serializers.ChoiceField(choices=MataPelajaran.MATKUL_CHOICES)
-    teacher = serializers.PrimaryKeyRelatedField(queryset=Teacher.objects.all(), required=False, allow_null=True)
-    siswa_terdaftar = serializers.PrimaryKeyRelatedField(queryset=Student.objects.all(), many=True, required=False)
-
+    teacher = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
+    siswa_terdaftar = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)
+    tahunAjaran = serializers.IntegerField(write_only=True)
+    
     class Meta:
         model = MataPelajaran
-        fields = ['id', 'kategoriMatpel','nama', 'kode', 'kelas', 'tahunAjaran', 'teacher', 'siswa_terdaftar', 'is_archived']
-        read_only_fields = ['kode']  # Karena kode dibuat otomatis di `save()`
+        fields = ['id', 'kategoriMatpel', 'nama', 'kode', 'kelas', 'tahunAjaran', 'teacher', 'siswa_terdaftar', 'is_archived']
+        read_only_fields = ['kode']
+
+    def validate_teacher(self, value):
+        """
+        Validate that the teacher exists and is not deleted.
+        """
+        try:
+            teacher = Teacher.objects.get(user_id=value.id)
+            if teacher.isDeleted:
+                raise serializers.ValidationError(f"Teacher with ID {value.id} exists but is marked as deleted")
+            return value
+        except Teacher.DoesNotExist:
+            raise serializers.ValidationError(f"No teacher found with ID {value.id}")
+
+    def validate_siswa_terdaftar(self, value):
+        """
+        Validate that all students exist and are not deleted.
+        """
+        valid_students = []
+        errors = []
+        
+        for user in value:
+            try:
+                student = Student.objects.get(user_id=user.id)
+                if student.isDeleted:
+                    errors.append(f"Student with ID {user.id} exists but is marked as deleted")
+                else:
+                    valid_students.append(user)
+            except Student.DoesNotExist:
+                errors.append(f"No student found with ID {user.id}")
+        
+        if errors:
+            raise serializers.ValidationError(errors)
+        
+        return valid_students
 
     def validate(self, data):
-        """Check for uniqueness of namaMatpel, kelas, and tahun_ajaran"""
-        if MataPelajaran.objects.filter(
-            nama=data['nama'],
+        """
+        Check for uniqueness of kategoriMatpel, kelas, and tahunAjaran.
+        """
+        # Get or create TahunAjaran
+        tahun = data.get('tahunAjaran')
+        try:
+            tahun_ajaran, created = TahunAjaran.objects.get_or_create(tahunAjaran=tahun)
+            data['tahunAjaran_instance'] = tahun_ajaran
+        except Exception as e:
+            raise serializers.ValidationError(f"Error with TahunAjaran: {str(e)}")
+        
+        # Check for existing MataPelajaran
+        existing = MataPelajaran.objects.filter(
+            kategoriMatpel=data['kategoriMatpel'],
             kelas=data['kelas'],
-            tahunAjaran=data['tahunAjaran'],
-            kategoriMatpel=data['kategoriMatpel']
-        ).exists():
-            raise serializers.ValidationError({"status":400,
-                "detail": "MataPelajaran with this namaMatpel, kelas, and tahun_ajaran already exists."
-            })  # 🔹 Ensure error is formatted correctly for API response
-
+            tahunAjaran=tahun_ajaran
+        ).first()
+        
+        if existing:
+            raise serializers.ValidationError({
+                "detail": f"A MataPelajaran with kategori '{data['kategoriMatpel']}', kelas {data['kelas']}, and tahun ajaran {tahun} already exists.",
+                "existing_id": existing.id
+            })
+        
         return data
 
     def create(self, validated_data):
-        try:
-            siswa_data = validated_data.pop('siswa_terdaftar', [])  # Extract siswa_terdaftar list
+        """
+        Create a new MataPelajaran with proper handling of relationships.
+        """
+        # Extract related objects
+        tahun_ajaran = validated_data.pop('tahunAjaran_instance')
+        teacher_user = validated_data.pop('teacher')
+        students_users = validated_data.pop('siswa_terdaftar', [])
+        
+        # Create MataPelajaran without relationships first
+        matapelajaran = MataPelajaran.objects.create(
+            kategoriMatpel=validated_data['kategoriMatpel'],
+            nama=validated_data['nama'],
+            kelas=validated_data['kelas'],
+            tahunAjaran=tahun_ajaran
+        )
+        
+        # Set the teacher using Django's ORM
+        teacher_field = MataPelajaran._meta.get_field('teacher')
+        column_name = teacher_field.column
+        MataPelajaran.objects.filter(id=matapelajaran.id).update(**{column_name: teacher_user.id})
+        
+        # Refresh from database
+        matapelajaran.refresh_from_db()
+        
+        # Add students
+        for user in students_users:
+            try:
+                student = Student.objects.get(user_id=user.id)
+                matapelajaran.siswa_terdaftar.add(student)
+            except Exception as e:
+                # Log the error but continue with other students
+                print(f"Error adding student {user.id}: {str(e)}")
+        
+        # Refresh from database again
+        matapelajaran.refresh_from_db()
+        
+        return matapelajaran
 
-            matapelajaran = MataPelajaran.objects.create(**validated_data)  # Create object first
-
-            if siswa_data:
-                matapelajaran.siswa_terdaftar.set(siswa_data)  # Use .set() for ManyToMany
-
-            return matapelajaran
-        except:
-            raise serializers.ValidationError({"status":400,
-                "detail": "MataPelajaran with this namaMatpel, kelas, and tahun_ajaran already exists."
+    def to_representation(self, instance):
+        """
+        Customize the output representation.
+        """
+        representation = super().to_representation(instance)
+        
+        # Add teacher details
+        if instance.teacher:
+            representation['teacher'] = {
+                'id': instance.teacher.user_id,
+                'name': instance.teacher.name,
+                'username': instance.teacher.username
+            }
+        
+        # Add student details
+        representation['siswa_terdaftar'] = []
+        for student in instance.siswa_terdaftar.all():
+            representation['siswa_terdaftar'].append({
+                'id': student.user_id,
+                'name': student.name,
+                'username': student.username
             })
+        
+        # Add tahunAjaran details
+        if instance.tahunAjaran:
+            representation['tahunAjaran'] = {
+                'id': instance.tahunAjaran.id,
+                'tahun': instance.tahunAjaran.tahunAjaran
+            }
+        
+        return representation
+
+    def update(self, instance, validated_data):
+        """
+        Update a MataPelajaran with proper handling of relationships.
+        """
+        # Extract related objects if present
+        tahun_ajaran_instance = None
+        if 'tahunAjaran_instance' in validated_data:
+            tahun_ajaran_instance = validated_data.pop('tahunAjaran_instance')
+        
+        teacher_user = validated_data.pop('teacher', None)
+        students_users = validated_data.pop('siswa_terdaftar', None)
+        
+        # Update simple fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        # Update tahunAjaran if provided
+        if tahun_ajaran_instance:
+            instance.tahunAjaran = tahun_ajaran_instance
+        
+        # Save the instance with updated fields
+        instance.save()
+        
+        # Update teacher if provided
+        if teacher_user:
+            teacher_field = MataPelajaran._meta.get_field('teacher')
+            column_name = teacher_field.column
+            MataPelajaran.objects.filter(id=instance.id).update(**{column_name: teacher_user.id})
+            instance.refresh_from_db()
+        
+        # Update students if provided
+        if students_users is not None:  # Check for None to distinguish from empty list
+            # Clear existing students
+            instance.siswa_terdaftar.clear()
+            
+            # Add new students
+            for user in students_users:
+                try:
+                    student = Student.objects.get(user_id=user.id)
+                    instance.siswa_terdaftar.add(student)
+                except Exception as e:
+                    # Log the error but continue with other students
+                    print(f"Error adding student {user.id}: {str(e)}")
+        
+        # Refresh from database
+        instance.refresh_from_db()
+        
+        return instance
