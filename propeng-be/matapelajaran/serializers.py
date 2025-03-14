@@ -64,9 +64,13 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f"Error with TahunAjaran: {str(e)}")
         
 
-        # nevermind, need to discuss if a matpel with the same name can exist,
-        # itd be weird if it cant but at the same time i think nama should've been auto generated
-        # using the kategorimatpel + tahunajaran + kelas 
+        # need to discuss if a matpel with the same name can exist,
+        # it'd be weird if it cant for instance "FISIKA WAJIB KELAS 12"
+        # and at the same time i think nama should've been auto generated
+        # using the kategorimatpel + kelas + tahunajaran
+        # FISIKA KELAS 11 2022  
+
+        # -------------------------------------------------------------
         # Check if a MataPelajaran with the same name already exists
         # nama = data.get('nama')
         # if nama:
