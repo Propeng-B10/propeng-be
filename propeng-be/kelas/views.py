@@ -1,4 +1,3 @@
-from django.shortcuts import render
 from django.http import JsonResponse
 from rest_framework.decorators import api_view
 from kelas.models import Kelas
@@ -97,7 +96,7 @@ def create_kelas(request):
                 "id": kelas.id,
                 "namaKelas": kelas.namaKelas,
                 "tahunAjaran": f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}" if kelas.tahunAjaran else None,
-                "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
+                "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
                 "totalSiswa": kelas.siswa.count(),
                 "angkatan": kelas.angkatan,
                 "isActive": kelas.isActive
@@ -142,7 +141,7 @@ def list_kelas(request):
                 "id": k.id,
                 "namaKelas": k.namaKelas if k.namaKelas else None,
                 "tahunAjaran": f"T.A. 20{k.tahunAjaran.tahunAjaran}/20{k.tahunAjaran.tahunAjaran+1}"  if k.tahunAjaran else None,
-                "waliKelas": f"{k.waliKelas} (NISP: {k.waliKelas.nisp})" if k.waliKelas else None,
+                "waliKelas": f"{k.waliKelas}" if k.waliKelas else None,
                 "totalSiswa": k.siswa.count(),
                 "angkatan": k.angkatan,
                 "isActive": k.isActive,
@@ -185,7 +184,7 @@ def detail_kelas(request, kelas_id):
             "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
                             if kelas.tahunAjaran else None
             ),
-            "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
+            "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
             "angkatan": kelas.angkatan,
@@ -213,7 +212,7 @@ def detail_kelas(request, kelas_id):
             "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
                             if kelas.tahunAjaran else None
             ),
-            "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
+            "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
             "angkatan": kelas.angkatan,
@@ -239,7 +238,7 @@ def detail_kelas(request, kelas_id):
             "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
                             if kelas.tahunAjaran else None
             ),
-            "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
+            "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
             "angkatan": kelas.angkatan,
@@ -349,7 +348,7 @@ def update_kelas(request, kelas_id):
                 "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
                                 if kelas.tahunAjaran else None
                 ),
-                "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
+                "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
                 "totalSiswa": kelas.siswa.count(),
                 "isActive": kelas.isActive,
                 "angkatan": kelas.angkatan,
