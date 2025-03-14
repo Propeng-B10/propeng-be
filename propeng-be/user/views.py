@@ -21,6 +21,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+class IsAdminRole(BasePermission):
+    """
+    only allow users with role 'admin' to access the view.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.role == 'admin')
+
 
 class ChangePasswordView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -45,7 +52,7 @@ class ChangePasswordView(APIView):
 
 # Mendapatkan info dropdown list semua guru (aktif dan tidak)
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminRole])
 def list_teacher(request):
     """List all teachers, including both active and deleted"""
     try:
@@ -147,7 +154,7 @@ def profile(request, id):
 
 # Mendapatkan info dropdown list guru aktif
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminRole])
 def list_active_teacher(request):
     """List only active teachers (not deleted)"""
     try:
@@ -180,7 +187,7 @@ def list_active_teacher(request):
 
 # Mendapatkan info dropdown list semua murid (aktif dan tidak)
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminRole])
 def list_student(request):
     """List all students, including both active and deleted"""
     try:
@@ -212,7 +219,7 @@ def list_student(request):
 
 # Mendapatkan info dropdown list murid aktif
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminRole])
 def list_active_student(request):
     """List only active students (not deleted)"""
     try:
@@ -242,12 +249,7 @@ def list_active_student(request):
             "message": f"Error retrieving active student list: {str(e)}"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class IsAdminRole(BasePermission):
-    """
-    only allow users with role 'admin' to access the view.
-    """
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.role == 'admin')
+
     
 
 # request.user.is_superuser
@@ -633,3 +635,58 @@ def edit_user(request, id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # End update and delete user
+
+# List all user
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdminRole])
+def list_users(request):
+    """List all users in the system"""
+    users = User.objects.all()
+    
+    # Create a list to store user data
+    user_list = []
+    
+    for user in users:
+        user_data = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role,
+            'is_active': user.is_active,
+            'date_joined': user.date_joined
+        }
+        
+        # Add role-specific data
+        if user.role == 'student':
+            try:
+                student = Student.objects.get(user=user)
+                user_data.update({
+                    'name': student.name,
+                    'nisn': student.nisn,
+                    'angkatan': student.angkatan,
+                    'isActive': student.isActive,
+                    'isDeleted': student.isDeleted
+                })
+            except Student.DoesNotExist:
+                pass
+        elif user.role == 'teacher':
+            try:
+                teacher = Teacher.objects.get(user=user)
+                user_data.update({
+                    'name': teacher.name,
+                    'nisp': teacher.nisp,
+                    'angkatan': teacher.angkatan,
+                    'isActive': teacher.isActive,
+                    'isDeleted': teacher.isDeleted,
+                    'homeroomId': teacher.homeroomId
+                })
+            except Teacher.DoesNotExist:
+                pass
+        
+        user_list.append(user_data)
+    
+    return Response({
+        'status': '200',
+        'message': 'Successfully retrieved all users',
+        'data': user_list
+    }, status=status.HTTP_200_OK)
