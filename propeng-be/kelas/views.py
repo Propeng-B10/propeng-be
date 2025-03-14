@@ -6,6 +6,47 @@ from kelas.models import Student
 from kelas.models import Teacher
 from tahunajaran.models import TahunAjaran
 
+
+'''
+Cek Siswa Tertentu pada Suatu Angkatan
+'''
+@api_view(['GET'])
+def list_siswa_by_angkatan(request, angkatan):
+    try:
+        # Normalize angkatan (misal: 22 -> 2022, 2022 -> 22)
+        angkatan = int(angkatan)
+        if angkatan < 100:  
+            angkatan += 2000  
+
+        # Filter siswa berdasarkan angkatan
+        siswa_list = Student.objects.filter(angkatan=angkatan)
+
+        if not siswa_list.exists():
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": f"Tidak ada siswa untuk angkatan {angkatan}."
+            }, status=404)
+
+        return JsonResponse({
+            "status": 200,
+            "message": f"Daftar siswa untuk angkatan {angkatan}",
+            "data": [
+                {
+                    "id": s.user.id,
+                    "name": s.name,
+                    "nisn": s.nisn,
+                    "username": s.username,
+                    "angkatan": s.angkatan
+                } for s in siswa_list
+            ]
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)
+    
 '''
 [PBI 9] Menambahkan Kelas
 '''
@@ -16,6 +57,7 @@ def create_kelas(request):
         nama_kelas = data.get('namaKelas')
         tahun_ajaran_id = data.get('tahunAjaran')
         wali_kelas_id = data.get('waliKelas')
+        angkatan = data.get('angkatan')
         siswa_ids = data.get('siswa', [])
 
         tahun_ajaran, created = TahunAjaran.objects.get_or_create(
@@ -39,6 +81,7 @@ def create_kelas(request):
             namaKelas=nama_kelas,
             tahunAjaran=tahun_ajaran,
             waliKelas=Teacher.objects.get(user_id=wali_kelas_id),
+            angkatan=angkatan,
             isActive=True
         )
 
@@ -56,6 +99,7 @@ def create_kelas(request):
                 "tahunAjaran": f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}" if kelas.tahunAjaran else None,
                 "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
                 "totalSiswa": kelas.siswa.count(),
+                "angkatan": kelas.angkatan,
                 "isActive": kelas.isActive
             }
         }, status=201)
@@ -100,6 +144,7 @@ def list_kelas(request):
                 "tahunAjaran": f"T.A. 20{k.tahunAjaran.tahunAjaran}/20{k.tahunAjaran.tahunAjaran+1}"  if k.tahunAjaran else None,
                 "waliKelas": f"{k.waliKelas} (NISP: {k.waliKelas.nisp})" if k.waliKelas else None,
                 "totalSiswa": k.siswa.count(),
+                "angkatan": k.angkatan,
                 "isActive": k.isActive,
                 "siswa": [
                     {
@@ -143,6 +188,7 @@ def detail_kelas(request, kelas_id):
             "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
+            "angkatan": kelas.angkatan,
             "siswa": [
                     {
                         "id": s.user.id,
@@ -170,6 +216,7 @@ def detail_kelas(request, kelas_id):
             "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
+            "angkatan": kelas.angkatan,
             "siswa": [
                     {
                         "id": s.user.id,
@@ -195,6 +242,7 @@ def detail_kelas(request, kelas_id):
             "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
+            "angkatan": kelas.angkatan,
             "siswa": [
                     {
                         "id": s.user.id,
@@ -304,6 +352,7 @@ def update_kelas(request, kelas_id):
                 "waliKelas": f"{kelas.waliKelas} (NISP: {kelas.waliKelas.nisp})" if kelas.waliKelas else None,
                 "totalSiswa": kelas.siswa.count(),
                 "isActive": kelas.isActive,
+                "angkatan": kelas.angkatan,
                 "siswa": [
                     {
                         "id": s.user.id,

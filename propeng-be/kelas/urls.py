@@ -1,5 +1,5 @@
 from django.urls import path
-from kelas.views import list_kelas, create_kelas, detail_kelas, delete_kelas, update_kelas
+from kelas.views import list_kelas, create_kelas, detail_kelas, delete_kelas, update_kelas, list_siswa_by_angkatan
 
 urlpatterns = [
     path('', list_kelas, name='list_kelas'),
@@ -7,4 +7,5 @@ urlpatterns = [
     path('<int:kelas_id>/', detail_kelas, name='detail_kelas'),
     path('delete/<int:kelas_id>/', delete_kelas, name='delete_kelas'),
     path('update/<int:kelas_id>/', update_kelas, name='update_kelas'),
+    path('list_siswa/<int:angkatan>/', list_siswa_by_angkatan, name='list_siswa_by_angkatan'),
 ]
