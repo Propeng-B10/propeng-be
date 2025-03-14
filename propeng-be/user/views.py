@@ -28,6 +28,13 @@ class IsAdminRole(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and request.user.role == 'admin')
 
+class IsTeacherRole(BasePermission):
+    """
+    only allow users with role 'admin' to access the view.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.role == 'teacher')
+
 
 class ChangePasswordView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -52,7 +59,7 @@ class ChangePasswordView(APIView):
 
 # Mendapatkan info dropdown list semua guru (aktif dan tidak)
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsAdminRole])
+@permission_classes([IsAuthenticated])
 def list_teacher(request):
     """List all teachers, including both active and deleted"""
     try:
@@ -154,7 +161,7 @@ def profile(request, id):
 
 # Mendapatkan info dropdown list guru aktif
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsAdminRole])
+@permission_classes([IsAuthenticated])
 def list_active_teacher(request):
     """List only active teachers (not deleted)"""
     try:
@@ -187,7 +194,7 @@ def list_active_teacher(request):
 
 # Mendapatkan info dropdown list semua murid (aktif dan tidak)
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsAdminRole])
+@permission_classes([IsAuthenticated])
 def list_student(request):
     """List all students, including both active and deleted"""
     try:
@@ -219,7 +226,7 @@ def list_student(request):
 
 # Mendapatkan info dropdown list murid aktif
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsAdminRole])
+@permission_classes([IsAuthenticated])
 def list_active_student(request):
     """List only active students (not deleted)"""
     try:
@@ -365,36 +372,6 @@ class logout_view(APIView):
     def post(self, request):
         """Handle logout."""
         return Response({"message": "Logged out successfully"}, status=200)
-    
-
-
-# @api_view(['PUT'])
-# @permission_classes([IsAuthenticated]) 
-# def change_password(request):
-#     user = request.user
-#     old_password = request.data.get("old_password")
-#     new_password = request.data.get("new_password")
-
-#     # Cek apakah password lama cocok dengan yang di-hash di database
-#     if not user.check_password(old_password):
-#         return Response({"error": "Password lama salah."}, status=status.HTTP_400_BAD_REQUEST)
-
-#     # Validasi password baru (minimal 8 karakter, ada huruf besar, kecil, angka)
-#     if len(new_password) < 8:
-#         return Response({"error": "Password harus minimal 8 karakter."}, status=status.HTTP_400_BAD_REQUEST)
-#     if not re.search(r'[A-Z]', new_password):
-#         return Response({"error": "Password harus mengandung setidaknya satu huruf besar."}, status=status.HTTP_400_BAD_REQUEST)
-#     if not re.search(r'[a-z]', new_password):
-#         return Response({"error": "Password harus mengandung setidaknya satu huruf kecil."}, status=status.HTTP_400_BAD_REQUEST)
-#     if not re.search(r'\d', new_password):
-#         return Response({"error": "Password harus mengandung setidaknya satu angka."}, status=status.HTTP_400_BAD_REQUEST)
-
-#     # Hash password baru sebelum menyimpan ke database
-#     user.password = make_password(new_password)
-#     user.save()
-
-#     return Response({"message": "Password berhasil diperbarui"}, status=status.HTTP_200_OK)
-
 
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])  # Admin harus login
@@ -638,7 +615,7 @@ def edit_user(request, id):
 
 # List all user
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsAdminRole])
+@permission_classes([IsAuthenticated])
 def list_users(request):
     """List all users in the system"""
     users = User.objects.all()
