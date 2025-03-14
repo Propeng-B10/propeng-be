@@ -612,7 +612,7 @@ def edit_user(request, id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # End update and delete user
-
+# test commit WKWKKW
 # List all user
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
