@@ -14,7 +14,7 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = MataPelajaran
-        fields = ['id', 'kategoriMatpel', 'nama', 'kode', 'kelas', 'tahunAjaran', 'teacher', 'siswa_terdaftar', 'is_archived']
+        fields = ['id', 'kategoriMatpel', 'nama', 'kode', 'tahunAjaran', 'teacher', 'siswa_terdaftar', 'is_archived']
         read_only_fields = ['kode']
 
     def validate_teacher(self, value):
@@ -53,7 +53,7 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """
-        Check for uniqueness of kategoriMatpel, kelas, and tahunAjaran.
+        Process TahunAjaran data and validate unique name.
         """
         # Get or create TahunAjaran
         tahun = data.get('tahunAjaran')
@@ -63,18 +63,24 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         except Exception as e:
             raise serializers.ValidationError(f"Error with TahunAjaran: {str(e)}")
         
-        # Check for existing MataPelajaran
-        existing = MataPelajaran.objects.filter(
-            kategoriMatpel=data['kategoriMatpel'],
-            kelas=data['kelas'],
-            tahunAjaran=tahun_ajaran
-        ).first()
-        
-        if existing:
-            raise serializers.ValidationError({
-                "detail": f"A MataPelajaran with kategori '{data['kategoriMatpel']}', kelas {data['kelas']}, and tahun ajaran {tahun} already exists.",
-                "existing_id": existing.id
-            })
+
+        # nevermind, need to discuss if a matpel with the same name can exist,
+        # itd be weird if it cant but at the same time i think nama should've been auto generated
+        # using the kategorimatpel + tahunajaran + kelas 
+        # Check if a MataPelajaran with the same name already exists
+        # nama = data.get('nama')
+        # if nama:
+        #     existing_matapelajaran = MataPelajaran.objects.filter(nama=nama)
+            
+        #     # If we're updating an existing instance, exclude it from the check
+        #     instance = getattr(self, 'instance', None)
+        #     if instance:
+        #         existing_matapelajaran = existing_matapelajaran.exclude(id=instance.id)
+            
+        #     if existing_matapelajaran.exists():
+        #         raise serializers.ValidationError({
+        #             "nama": f"A MataPelajaran with the name '{nama}' already exists."
+        #         })
         
         return data
 
@@ -91,7 +97,6 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         matapelajaran = MataPelajaran.objects.create(
             kategoriMatpel=validated_data['kategoriMatpel'],
             nama=validated_data['nama'],
-            kelas=validated_data['kelas'],
             tahunAjaran=tahun_ajaran
         )
         

@@ -58,7 +58,6 @@ def list_matapelajaran(request):
                 "nama": mapel.nama,
                 "kategoriMatpel": mapel.get_kategoriMatpel_display(),  # Get readable choice name
                 "kode": mapel.kode,
-                "kelas": mapel.kelas,
                 "tahunAjaran": mapel.tahunAjaran.tahunAjaran if mapel.tahunAjaran else None,
                 "teacher": {
                     "id": mapel.teacher.user_id if mapel.teacher else None,
@@ -161,7 +160,6 @@ def delete_mata_pelajaran(request, pk):
             "id": matapelajaran.id,
             "nama": matapelajaran.nama,
             "kategoriMatpel": matapelajaran.get_kategoriMatpel_display(),
-            "kelas": matapelajaran.kelas,
             "tahunAjaran": matapelajaran.tahunAjaran.tahunAjaran if matapelajaran.tahunAjaran else None
         }
         

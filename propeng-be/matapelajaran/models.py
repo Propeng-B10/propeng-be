@@ -17,10 +17,9 @@ class MataPelajaran(models.Model):
 
     nama = models.TextField(max_length=100)
     kategoriMatpel = models.CharField(max_length=50, choices=MATKUL_CHOICES)
-    kode = models.CharField(max_length=20, unique=True, blank=True)
-    kelas = models.IntegerField()
+    kode = models.CharField(max_length=20, unique=False, blank=True)
     tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)
-
+    
     teacher = models.ForeignKey(
         Teacher, 
         on_delete=models.SET_NULL, 
@@ -36,12 +35,9 @@ class MataPelajaran(models.Model):
 
     is_archived = models.BooleanField(default=False)
 
-    class Meta:
-        unique_together = ('kategoriMatpel', 'kelas', 'tahunAjaran')
-
     def save(self, *args, **kwargs):
         if not self.kode:  # Auto-generate kode if not provided
-            self.kode = f"{self.kategoriMatpel.replace('_', '').upper()}_{self.kelas}_{self.tahunAjaran}"
+            self.kode = f"{self.kategoriMatpel.replace('_', '').upper()}_{self.tahunAjaran}"
         super().save(*args, **kwargs)
 
 

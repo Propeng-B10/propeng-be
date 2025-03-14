@@ -256,9 +256,6 @@ def list_active_student(request):
             "message": f"Error retrieving active student list: {str(e)}"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-    
-
 # request.user.is_superuser
 
 class RegisterUserView(generics.CreateAPIView):
