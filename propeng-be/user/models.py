@@ -76,4 +76,7 @@ class Teacher(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.user.username}"
+        if self.user.homeroomId is not None or self.user.homeroomId:
+            return f"{self.user.username} - Wali Kelas {self.user.homeroomId}"
+        else:
+            return f"{self.user.username} - Guru"
