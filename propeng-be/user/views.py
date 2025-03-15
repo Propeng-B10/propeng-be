@@ -192,6 +192,39 @@ def list_active_teacher(request):
             "message": f"Error retrieving active teacher list: {str(e)}"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_homeroom_teachers(request):
+    """List teachers who are assigned as homeroom teachers (have homeroomId)"""
+    try:
+        # Filter teachers who have a non-null homeroomId
+        teachers = Teacher.objects.filter(homeroomId__isnull=False)
+        teacher_list = []
+        
+        for teacher in teachers:
+            teacher_data = {
+                "id": teacher.user_id,
+                "name": teacher.name,
+                "username": teacher.user.username,
+                "nisp": teacher.nisp,
+                "homeroomId": teacher.homeroomId,
+                "angkatan": teacher.angkatan,
+                "status": "Deleted" if teacher.isDeleted else "Active"
+            }
+            teacher_list.append(teacher_data)
+            
+        return Response({
+            "status": 200,
+            "message": "Successfully retrieved list of homeroom teachers",
+            "data": teacher_list
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error retrieving homeroom teacher list: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 # Mendapatkan info dropdown list semua murid (aktif dan tidak)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
