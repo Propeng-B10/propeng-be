@@ -1,11 +1,44 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.hashers import make_password
+from django.contrib.admin.sites import AdminSite
 from .models import User, Student, Teacher
+from django import forms
+
+# Custom admin site that only allows superusers
+class SuperuserAdminSite(AdminSite):
+    def has_permission(self, request):
+        return request.user.is_active and request.user.is_superuser
+
+# Create custom admin site instance
+admin_site = SuperuserAdminSite(name='admin')
+
+# Custom form for User model that limits role choices to 'admin' only
+class CustomUserAdminForm(forms.ModelForm):
+    # Define role field explicitly with only admin option
+    ADMIN_ONLY_CHOICES = [('admin', 'Admin')]
+    role = forms.ChoiceField(choices=ADMIN_ONLY_CHOICES, required=True)
+    
+    class Meta:
+        model = User
+        fields = '__all__'
+    
+    # Override the constructor to ensure the role field is always limited
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Hard-code role choices to only 'admin'
+        self.fields['role'].choices = self.ADMIN_ONLY_CHOICES
+        
+        # If editing an existing user and role isn't admin, force it to admin
+        if self.instance and self.instance.pk and self.instance.role != 'admin':
+            self.instance.role = 'admin'
 
 class CustomUserAdmin(UserAdmin):
+    form = CustomUserAdminForm
     model = User
-    list_display = ('username', 'email', 'role', 'is_staff', 'is_active')
+    list_display = ('username', 'role', 'is_staff', 'is_active')
+    
+    # Override to force 'admin' role in both add and change forms
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('Personal Info', {'fields': ('first_name', 'last_name', 'email')}),
@@ -15,36 +48,32 @@ class CustomUserAdmin(UserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('username', 'email', 'role', 'password1', 'password2', 'is_staff', 'is_active')}
+            'fields': ('username', 'password1', 'password2', 'is_staff', 'is_active')}
         ),
     )
+    
+    # Ensure 'admin' is the only choice for role when saving
+    def save_model(self, request, obj, form, change):
+        obj.role = 'admin'  # Force role to be admin
+        super().save_model(request, obj, form, change)
 
     # Custom function to create a new user with role-specific attributes
     def create_user(self, request, queryset):
         for user_data in queryset:
             username = user_data.get("username")
-            email = user_data.get("email")
             password = user_data.get("password")
-            role = user_data.get("role")
-            nomorinduk = user_data.get("nomorinduk")  # NISN for students, NISP for teachers
 
             user = User.objects.create(
                 username=username,
-                email=email,
-                role=role,
+                email=None,
+                role="admin",
                 password=make_password(password)  # Hash password before saving
             )
-
-            # Create Student or Teacher based on role
-            if role == "student":
-                Student.objects.create(user=user, nisn=nomorinduk)
-            elif role == "teacher":
-                Teacher.objects.create(user=user, nisp=nomorinduk)
-
             user.save()
 
     actions = ["create_user"]
 
-admin.site.register(User, CustomUserAdmin)
-admin.site.register(Student)
-admin.site.register(Teacher)
+# Register models with the custom admin site
+admin_site.register(User, CustomUserAdmin)
+# Replace default admin site with custom admin site
+admin.site = admin_site
