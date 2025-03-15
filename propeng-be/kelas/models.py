@@ -1,6 +1,6 @@
 from django.db import models
-from user.models import Teacher
-from user.models import Student
+from user.models import Teacher as Teacher
+from user.models import Student as Student
 from tahunajaran.models import TahunAjaran
 from django.utils import timezone
 

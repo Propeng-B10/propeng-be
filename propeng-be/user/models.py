@@ -62,12 +62,19 @@ class Teacher(models.Model):
     name = models.CharField(null=True, blank=True, max_length=32)
     nisp = models.CharField(null=True, blank=True, max_length=20)
     username = models.CharField(null=True, blank=True, max_length=32)
-    homeroomId = models.IntegerField(null=True, blank=True)
+    homeroomId = models.ForeignKey(
+        'kelas.kelas',  # Reference to the Kelas model
+        on_delete=models.SET_NULL,
+        null=True, 
+        blank=True,
+        related_name='waliKelasDari'
+    )
     angkatan = models.IntegerField(null=False, blank=False, default=2023)
     isActive = models.BooleanField(default=True)
     isDeleted = models.BooleanField(default=False)
     createdAt = models.DateTimeField(default=timezone.now)
     updatedAt = models.DateTimeField(auto_now=True)
+    
 
     def save(self, *args, **kwargs):
         # Sync username with User model before saving
@@ -76,7 +83,7 @@ class Teacher(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        if self.user.homeroomId is not None or self.user.homeroomId:
-            return f"{self.user.username} - Wali Kelas {self.user.homeroomId}"
+        if self.homeroomId is not None or self.homeroomId:
+            return f"{self.user.username} - Wali Kelas {self.homeroomId}"
         else:
             return f"{self.user.username} - Guru"
