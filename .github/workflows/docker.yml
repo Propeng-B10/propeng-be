@@ -21,7 +21,7 @@ jobs:
 
       - name: Build and tag Docker image
         run: |
-          docker build -t bangabb/propeng-be:latest .
+          docker build -t bangabb/propeng-be:latest -f propeng-be/Dockerfile propeng-be
 
       - name: Push image to Docker Hub
         run: |
