@@ -543,7 +543,8 @@ def edit_user(request, id):
                     "student_id": student.user_id,
                     "name": student.name,
                     "nisn": student.nisn,
-                    "status": "Deleted" if student.isDeleted else "Active"
+                    "status": "Deleted" if student.isDeleted else "Active",
+                    "angkatan": student.angkatan
                 })
                 
                 if "name" in data and data["name"] != student.name:
@@ -558,6 +559,9 @@ def edit_user(request, id):
                         }, status=status.HTTP_400_BAD_REQUEST)
                     updated_fields.append("nisn")
                     student.nisn = data["nisn"]
+                if "nisn" in data and data["nisn"] != student.nisn:
+                    updated_fields.append("angkatan")
+                    student.angkatan = data["angkatan"]
                 
                 student.save()
             else:
@@ -614,7 +618,8 @@ def edit_user(request, id):
                 "student_id": student.user_id,
                 "name": student.name,
                 "nisn": student.nisn,
-                "status": "Deleted" if student.isDeleted else "Active"
+                "status": "Deleted" if student.isDeleted else "Active",
+                "angkatan": student.angkatan
             })
         elif user.role == "teacher" and teacher:
             response_data["current_data"].update({
