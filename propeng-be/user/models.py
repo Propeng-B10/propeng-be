@@ -84,6 +84,6 @@ class Teacher(models.Model):
 
     def __str__(self):
         if self.homeroomId is not None or self.homeroomId:
-            return f"{self.user.username} - Wali Kelas {self.homeroomId}"
+            return f"{self.user.username}"
         else:
-            return f"{self.user.username} - Guru"
+            return f"{self.user.username}"

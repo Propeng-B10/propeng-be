@@ -4,31 +4,37 @@ from kelas.models import Kelas
 from kelas.models import Student
 from kelas.models import Teacher
 from tahunajaran.models import TahunAjaran
-
+import re
 
 '''
 Cek Siswa Tertentu pada Suatu Angkatan
 '''
+
 @api_view(['GET'])
-def list_siswa_by_angkatan(request, angkatan):
+def list_available_student_by_angkatan(request, angkatan):
+    """List students who are NOT assigned to any class for a given batch"""
     try:
-        # Normalize angkatan (misal: 22 -> 2022, 2022 -> 22)
+        # Normalisasi angkatan (misal: 23 → 2023, 2023 → tetap 2023)
         angkatan = int(angkatan)
         if angkatan < 100:  
             angkatan += 2000  
 
-        # Filter siswa berdasarkan angkatan
+        # Ambil semua siswa di angkatan tersebut
         siswa_list = Student.objects.filter(angkatan=angkatan)
 
-        if not siswa_list.exists():
+        # Ambil siswa yang sudah masuk dalam kelas
+        siswa_dalam_kelas = Kelas.objects.values_list('siswa', flat=True)  # Mengambil daftar siswa dalam kelas
+        siswa_tanpa_kelas = siswa_list.exclude(user_id__in=siswa_dalam_kelas)  # Filter siswa yang tidak ada dalam kelas
+
+        if not siswa_tanpa_kelas.exists():
             return JsonResponse({
                 "status": 404,
-                "errorMessage": f"Tidak ada siswa untuk angkatan {angkatan}."
+                "errorMessage": f"Tidak ada siswa tanpa kelas untuk angkatan {angkatan}."
             }, status=404)
 
         return JsonResponse({
             "status": 200,
-            "message": f"Daftar siswa untuk angkatan {angkatan}",
+            "message": f"Daftar siswa yang belum memiliki kelas untuk angkatan {angkatan}",
             "data": [
                 {
                     "id": s.user.id,
@@ -36,7 +42,7 @@ def list_siswa_by_angkatan(request, angkatan):
                     "nisn": s.nisn,
                     "username": s.username,
                     "angkatan": s.angkatan
-                } for s in siswa_list
+                } for s in siswa_tanpa_kelas
             ]
         }, status=200)
 
@@ -46,9 +52,50 @@ def list_siswa_by_angkatan(request, angkatan):
             "errorMessage": f"Terjadi kesalahan: {str(e)}"
         }, status=500)
     
+@api_view(['GET'])
+def list_available_teacher(request):
+    """List all teachers, including both active and deleted, and show teachers without homeroom"""
+    try:
+        # Filter guru yang tidak menjadi wali kelas (homeroomId is NULL)
+        teachers_without_homeroom = Teacher.objects.filter(homeroomId__isnull=True)
+
+        if not teachers_without_homeroom.exists():
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": "Tidak ada guru yang tidak menjadi wali kelas."
+            }, status=404)
+
+        teacher_list = []
+        for teacher in teachers_without_homeroom:
+            teacher_data = {
+                "id": teacher.user_id,
+                "name": teacher.name,
+                "username": teacher.user.username,  # Synchronized username
+                "nisp": teacher.nisp,
+                "status": "Deleted" if teacher.isDeleted else "Active"
+            }
+            teacher_list.append(teacher_data)
+            
+        return JsonResponse({
+            "status": 200,
+            "message": "Daftar guru yang tidak menjadi wali kelas",
+            "data": teacher_list
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)
+
+
 '''
 [PBI 9] Menambahkan Kelas
 '''
+from django.http import JsonResponse
+from rest_framework.decorators import api_view
+from .models import TahunAjaran, Teacher, Student, Kelas
+
 @api_view(['POST'])
 def create_kelas(request):
     try:
@@ -59,14 +106,24 @@ def create_kelas(request):
         angkatan = data.get('angkatan')
         siswa_ids = data.get('siswa', [])
 
+         # **Hapus prefix "Kelas " jika ada di awal nama_kelas**
+        nama_kelas = re.sub(r'^Kelas\s+', '', nama_kelas, flags=re.IGNORECASE)
+
         tahun_ajaran, created = TahunAjaran.objects.get_or_create(
             tahunAjaran=tahun_ajaran_id
         )
 
-        waliKelas=Teacher.objects.get(user_id=wali_kelas_id)
+        waliKelas = Teacher.objects.get(user_id=wali_kelas_id)
+
+        # **Cek apakah wali kelas sudah memiliki homeroomId di kelas aktif lain**
+        if Kelas.objects.filter(waliKelas=waliKelas, isActive=True).exists():
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": "Wali kelas ini sudah terdaftar di kelas lain."
+            }, status=400)
 
         # **RESET homeroomId jika tidak cocok dengan kelas aktif mana pun**
-        if waliKelas.homeroomId and not Kelas.objects.filter(id=waliKelas.homeroomId, isActive=True).exists():
+        if waliKelas.homeroomId and not Kelas.objects.filter(id=waliKelas.homeroomId.id, isActive=True).exists():
             waliKelas.homeroomId = None
             waliKelas.save()
 
@@ -76,17 +133,32 @@ def create_kelas(request):
                 "errorMessage": "Nama kelas wajib diisi."
             }, status=400)
 
+        # **Cek apakah semua siswa ditemukan**
+        siswa_list = Student.objects.filter(user_id__in=siswa_ids)
+        found_siswa_ids = set(siswa_list.values_list('user_id', flat=True))
+        missing_siswa_ids = set(siswa_ids) - found_siswa_ids
+
+        if missing_siswa_ids:
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": f"Siswa dengan user_id {list(missing_siswa_ids)} tidak ditemukan."
+            }, status=400)
+
+        # Normalisasi angkatan agar selalu dalam format 4 digit (2023, 2025, dst.)
+        if angkatan < 100:
+            angkatan += 2000  # Ubah 23 -> 2023, 25 -> 2025
+
+        # **Membuat kelas**
         kelas = Kelas.objects.create(
             namaKelas=nama_kelas,
             tahunAjaran=tahun_ajaran,
-            waliKelas=Teacher.objects.get(user_id=wali_kelas_id),
+            waliKelas=waliKelas,
             angkatan=angkatan,
             isActive=True
         )
 
-        siswa_list = Student.objects.filter(user_id__in=siswa_ids)
         kelas.siswa.set(siswa_list)
-        waliKelas.homeroomId = kelas.id
+        waliKelas.homeroomId = kelas
         waliKelas.save()
 
         return JsonResponse({
@@ -94,14 +166,19 @@ def create_kelas(request):
             "message": "Kelas berhasil dibuat!",
             "data": {
                 "id": kelas.id,
-                "namaKelas": kelas.namaKelas,
-                "tahunAjaran": f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}" if kelas.tahunAjaran else None,
+                "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
+                "tahunAjaran": f"{kelas.tahunAjaran.tahunAjaran}" if kelas.tahunAjaran else None,
                 "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
                 "totalSiswa": kelas.siswa.count(),
                 "angkatan": kelas.angkatan,
                 "isActive": kelas.isActive
             }
         }, status=201)
+    except Teacher.DoesNotExist:
+        return JsonResponse({
+            "status": 400,
+            "errorMessage": "Wali kelas tidak ditemukan."
+        }, status=400)
     except Exception as e:
         return JsonResponse({
             "status": 500,
@@ -125,35 +202,38 @@ def list_kelas(request):
         ''' Ini pertama ngecek isEmpty dulu, 
         nah kalau True artinya gak ada kan, terus bisa store Error Message di FE-nya '''
         return JsonResponse({
-                "isEmpty":isEmpty,
+                # "isEmpty":isEmpty,
                 "status": 400,
                 "errorMessage": "Belum ada kelas yang terdaftar! Silahkan menambahkan kelas baru."
             }, status = 400)
+    
+    kelas_list = Kelas.objects.all()
 
     ''' Ini pertama ngecek isEmpty dulu, 
     nah kalau False baru deh ambil data.json dari "data" '''
     return JsonResponse({
-            "isEmpty":isEmpty,
+            # "isEmpty":isEmpty,
             "status": 201,
             "message": "Semua kelas berhasil diambil!",
             "data": [
                 {
-                "id": k.id,
-                "namaKelas": k.namaKelas if k.namaKelas else None,
-                "tahunAjaran": f"T.A. 20{k.tahunAjaran.tahunAjaran}/20{k.tahunAjaran.tahunAjaran+1}"  if k.tahunAjaran else None,
-                "waliKelas": f"{k.waliKelas}" if k.waliKelas else None,
-                "totalSiswa": k.siswa.count(),
-                "angkatan": k.angkatan,
-                "isActive": k.isActive,
-                "siswa": [
+                    "id": k.id,
+                    "namaKelas": re.sub(r'^Kelas\s+', '', k.namaKelas, flags=re.IGNORECASE) if k.namaKelas else None,
+                    "tahunAjaran": k.tahunAjaran.tahunAjaran if k.tahunAjaran else None,
+                    "waliKelas": str(k.waliKelas) if k.waliKelas else None,
+                    "totalSiswa": k.siswa.count(),
+                    "angkatan": k.angkatan if k.angkatan >= 1000 else k.angkatan + 2000,
+                    "isActive": k.isActive,
+                    "siswa": [
                     {
                         "id": s.user.id,
                         "name": s.name,
                         "nisn": s.nisn,
                         "username": s.username
                     } for s in k.siswa.all()
-                ]
-                } for k in kelas.all()
+                ]}for k in kelas_list
+                
+
             ]
         }, status=201)
 
@@ -175,19 +255,17 @@ def detail_kelas(request, kelas_id):
         if not waliKelas:
             isEmptySiswainClass = False
             return JsonResponse({
-            "isEmpty":isEmptyClass,
-            "isEmptySiswainClass":isEmptySiswainClass,
+            # "isEmpty":isEmptyClass,
+            # "isEmptySiswainClass":isEmptySiswainClass,
             "status": 201,
             "message": "Tidak ada wali kelas di kelas ini",
             "id": kelas.id,
-            "namaKelas": kelas.namaKelas if kelas.namaKelas!="" else None,
-            "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
-                            if kelas.tahunAjaran else None
-            ),
+            "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
+            "tahunAjaran": f"{kelas.tahunAjaran.tahunAjaran}" if kelas.tahunAjaran else None,
             "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
-            "angkatan": kelas.angkatan,
+            "angkatan": kelas.angkatan if kelas.angkatan >= 1000 else kelas.angkatan + 2000,
             "siswa": [
                     {
                         "id": s.user.id,
@@ -202,20 +280,18 @@ def detail_kelas(request, kelas_id):
             isEmptySiswainClass = True
             isEmptyWaliKelasinClass = False
             return JsonResponse({
-            "isEmpty":isEmptyClass,
-            "isEmptySiswainClass":isEmptySiswainClass,
-            "isEmptyWaliKelasinClass":isEmptyWaliKelasinClass,
+            # "isEmpty":isEmptyClass,
+            # "isEmptySiswainClass":isEmptySiswainClass,
+            # "isEmptyWaliKelasinClass":isEmptyWaliKelasinClass,
             "status": 201,
             "message": "Tidak ada siswa di kelas ini",
             "id": kelas.id,
-            "namaKelas": kelas.namaKelas if kelas.namaKelas!="" else None,
-            "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
-                            if kelas.tahunAjaran else None
-            ),
+            "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
+            "tahunAjaran": f"{kelas.tahunAjaran.tahunAjaran}" if kelas.tahunAjaran else None,
             "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
-            "angkatan": kelas.angkatan,
+            "angkatan": kelas.angkatan if kelas.angkatan >= 1000 else kelas.angkatan + 2000,
             "siswa": [
                     {
                         "id": s.user.id,
@@ -228,20 +304,18 @@ def detail_kelas(request, kelas_id):
         
         return JsonResponse(
             {
-            "isEmpty":isEmptyClass,
-            "isEmptySiswainClass":isEmptySiswainClass,
-            "isEmptyWaliKelasinClass":isEmptyWaliKelasinClass,
+            # "isEmpty":isEmptyClass,
+            # "isEmptySiswainClass":isEmptySiswainClass,
+            # "isEmptyWaliKelasinClass":isEmptyWaliKelasinClass,
             "status": 201,
             "message": "Kelas yang dicari ada",
             "id": kelas.id,
-            "namaKelas": kelas.namaKelas if kelas.namaKelas!="" else None,
-            "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
-                            if kelas.tahunAjaran else None
-            ),
+            "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
+            "tahunAjaran": f"{kelas.tahunAjaran.tahunAjaran}" if kelas.tahunAjaran else None,
             "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
-            "angkatan": kelas.angkatan,
+            "angkatan": kelas.angkatan if kelas.angkatan >= 1000 else kelas.angkatan + 2000,
             "siswa": [
                     {
                         "id": s.user.id,
@@ -344,14 +418,12 @@ def update_kelas(request, kelas_id):
             "message": "Kelas berhasil diubah!",
             "data": {
                 "id": kelas.id,
-                "namaKelas": kelas.namaKelas if kelas.namaKelas!="" else None,
-                "tahunAjaran": (f"T.A. 20{kelas.tahunAjaran.tahunAjaran}/20{kelas.tahunAjaran.tahunAjaran+1}"
-                                if kelas.tahunAjaran else None
-                ),
+                "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
+                "tahunAjaran": f"{kelas.tahunAjaran.tahunAjaran}" if kelas.tahunAjaran else None,
                 "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
                 "totalSiswa": kelas.siswa.count(),
                 "isActive": kelas.isActive,
-                "angkatan": kelas.angkatan,
+                "angkatan": kelas.angkatan if kelas.angkatan >= 1000 else kelas.angkatan + 2000,
                 "siswa": [
                     {
                         "id": s.user.id,

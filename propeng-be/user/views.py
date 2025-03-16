@@ -72,7 +72,7 @@ def list_teacher(request):
                 "name": teacher.name,
                 "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
-                "homeroomId": teacher.homeroomId,
+                "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
                 "angkatan": teacher.angkatan,
                 "status": "Deleted" if teacher.isDeleted else "Active"
             }
@@ -174,7 +174,7 @@ def list_active_teacher(request):
                 "name": teacher.name,
                 "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
-                "homeroomId": teacher.homeroomId,
+                "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
                 "angkatan": teacher.angkatan,
                 "status": "Active"
             }
