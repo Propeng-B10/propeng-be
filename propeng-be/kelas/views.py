@@ -53,7 +53,7 @@ def list_available_student_by_angkatan(request, angkatan):
         }, status=500)
     
 @api_view(['GET'])
-def list_available_teacher(request):
+def list_available_homeroom(request):
     """List all teachers, including both active and deleted, and show teachers without homeroom"""
     try:
         # Filter guru yang tidak menjadi wali kelas (homeroomId is NULL)
@@ -88,7 +88,35 @@ def list_available_teacher(request):
             "errorMessage": f"Terjadi kesalahan: {str(e)}"
         }, status=500)
 
+@api_view(['GET'])
+def list_all_homeroom(request):
+    try:
+        homerooms = Kelas.objects.filter(isActive=True).select_related('tahunAjaran', 'waliKelas').prefetch_related('siswa')
 
+        data = []
+        for k in homerooms:
+            data.append({
+                "id": k.id,
+                "namaKelas": re.sub(r'^Kelas\s+', '', k.namaKelas, flags=re.IGNORECASE) if k.namaKelas else None,
+                "tahunAjaran": f"{k.tahunAjaran.tahunAjaran}" if k.tahunAjaran else None,
+                "waliKelas": f"{k.waliKelas}" if k.waliKelas else None,
+                "totalSiswa": k.siswa.count(),
+                "angkatan": k.angkatan,
+                "isActive": k.isActive
+            })
+
+        return JsonResponse({
+            "status": 200,
+            "message": "Daftar homeroom berhasil diambil.",
+            "data": data
+        }, status=200)
+    
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)
+    
 '''
 [PBI 9] Menambahkan Kelas
 '''
