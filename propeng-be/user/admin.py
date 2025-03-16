@@ -138,8 +138,7 @@ class CustomStudentAdminForm(forms.ModelForm):
         # Always set role to admin
         cleaned_data['role'] = 'student'
         return cleaned_data
-    
-
+    # test commit
 class CustomStudentAdmin(admin.ModelAdmin):
     form = CustomUserAdminForm
     model = User
