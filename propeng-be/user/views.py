@@ -117,7 +117,7 @@ def profile(request, id):
                 profile_data.update({
                     "name": student.name,
                     "nisn": student.nisn,
-                    "angkatan": student.angkatan,
+                    "angkatan": student.angkatan.angkatan,
                     "status": "Deleted" if student.isDeleted else "Active"
                 })
             else:
@@ -132,7 +132,7 @@ def profile(request, id):
                 profile_data.update({
                     "name": teacher.name,
                     "nisp": teacher.nisp,
-                    "angkatan":teacher.angkatan,
+                    "angkatan":teacher.angkatan.angkatan,
                     "homeroomId": teacher.homeroomId,
                     "status": "Deleted" if teacher.isDeleted else "Active"
                 })
@@ -682,6 +682,8 @@ def list_users(request):
                     continue
             except Teacher.DoesNotExist:
                 pass
+        else:
+            continue
 
         user_data = {
             'id': user.id,
@@ -693,13 +695,12 @@ def list_users(request):
         
         # Add role-specific data
         if user.role == 'student':
-            angkatan = Angkatan
             try:
                 student = Student.objects.get(user=user)
                 user_data.update({
                     'name': student.name,
                     'isActive': student.isActive,
-                    'angkatan':student.angkatan
+                    'angkatan':student.angkatan.angkatan
                 })
             except Student.DoesNotExist:
                 pass
@@ -709,7 +710,7 @@ def list_users(request):
                 user_data.update({
                     'name': teacher.name,
                     'isActive': teacher.isActive,
-                    'angkatan':teacher.angkatan,
+                    'angkatan':teacher.angkatan.angkatan,
                 })
             except Teacher.DoesNotExist:
                 pass

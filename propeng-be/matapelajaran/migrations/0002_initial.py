@@ -9,25 +9,25 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('kelas', '0001_initial'),
+        ('matapelajaran', '0001_initial'),
         ('tahunajaran', '0001_initial'),
         ('user', '0001_initial'),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='kelas',
-            name='siswa',
-            field=models.ManyToManyField(related_name='siswa', to='user.student'),
+            model_name='matapelajaran',
+            name='siswa_terdaftar',
+            field=models.ManyToManyField(blank=True, related_name='matapelajaran_diikuti', to='user.student'),
         ),
         migrations.AddField(
-            model_name='kelas',
+            model_name='matapelajaran',
             name='tahunAjaran',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='tahunajaran.tahunajaran'),
         ),
         migrations.AddField(
-            model_name='kelas',
-            name='waliKelas',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='waliKelas', to='user.teacher'),
+            model_name='matapelajaran',
+            name='teacher',
+            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='matapelajaran_diajarkan', to='user.teacher'),
         ),
     ]
