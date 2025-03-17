@@ -523,6 +523,47 @@ def update_kelas(request, kelas_id):
     except Exception as e:
         return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat mengupdate kelas: {str(e)}"}, status=500)
 
+@api_view(['DELETE'])
+def delete_siswa_from_kelas(request, kelas_id, siswa_id):
+    try:
+        try:
+            kelas = Kelas.objects.get(id=kelas_id)
+        except Kelas.DoesNotExist:
+            return JsonResponse({"status": 404, "errorMessage": "Kelas tidak ditemukan!"}, status=404)
+
+        try:
+            siswa = kelas.siswa.get(user_id=siswa_id)
+        except Student.DoesNotExist:
+            return JsonResponse({"status": 404, "errorMessage": "Siswa tidak ditemukan dalam kelas ini!"}, status=404)
+
+        # Simpan data siswa sebelum dihapus
+        siswa_sebelumnya = {
+            "id": siswa.user.id,
+            "name": siswa.name,
+            "nisn": siswa.nisn,
+            "username": siswa.username,
+            "isAssignedtoClass": siswa.isAssignedtoClass,
+        }
+
+        # Hapus siswa dari kelas dan update isAssignedtoClass
+        kelas.siswa.remove(siswa)
+        siswa.isAssignedtoClass = False
+        siswa.save()
+
+        return JsonResponse({
+            "status": 200,
+            "message": "Siswa berhasil dihapus dari kelas!",
+            "data": {
+                "kelasId": kelas.id,
+                "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
+                "siswaSebelumnya": siswa_sebelumnya
+            }
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat menghapus siswa dari kelas: {str(e)}"}, status=500)
+
+
 '''
 [PBI 12] Menghapus Kelas (Soft Delete)
 '''
