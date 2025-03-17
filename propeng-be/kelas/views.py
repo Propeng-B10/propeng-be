@@ -52,6 +52,67 @@ def list_available_student_by_angkatan(request, angkatan):
             "errorMessage": f"Terjadi kesalahan: {str(e)}"
         }, status=500)
     
+@api_view(['POST'])
+def add_siswa_to_kelas(request, kelas_id):
+    try:
+        data = request.data
+        students_id = data.get("students", [])  # List of student IDs
+        angkatan = data.get("angkatan")  # Ambil angkatan dari request
+
+        # Normalisasi angkatan (misal: 23 → 2023, 2023 → tetap 2023)
+        if angkatan:
+            angkatan = int(angkatan)
+            if angkatan < 100:
+                angkatan += 2000  
+
+        try:
+            kelas = Kelas.objects.get(id=kelas_id)
+        except Kelas.DoesNotExist:
+            return JsonResponse({"status": 404, "errorMessage": "Kelas tidak ditemukan!"}, status=404)
+
+        if not students_id:
+            return JsonResponse({"status": 400, "errorMessage": "Tidak ada siswa yang dikirimkan!"}, status=400)
+
+        # Filter siswa berdasarkan ID dan angkatan jika diberikan
+        existing_students = Student.objects.filter(user_id__in=students_id)
+        if angkatan:
+            existing_students = existing_students.filter(angkatan=angkatan)
+
+        if not existing_students.exists():
+            return JsonResponse({"status": 404, "errorMessage": "Tidak ada siswa yang ditemukan atau sesuai dengan angkatan!"}, status=404)
+
+        # Cek apakah siswa sudah ada di kelas lain yang masih aktif
+        students_in_active_classes = set(Kelas.objects.filter(isActive=True, siswa__in=existing_students)
+                                         .exclude(id=kelas_id)
+                                         .values_list("siswa__user_id", flat=True))
+        students_already_in_class = set(students_id) & students_in_active_classes
+        if students_already_in_class:
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": f"Siswa dengan ID {list(students_already_in_class)} sudah masuk ke kelas lain yang masih aktif!"
+            }, status=400)
+
+        # Tambahkan siswa ke kelas dan update isAssignedtoClass
+        kelas.siswa.add(*existing_students)
+        existing_students.update(isAssignedtoClass=True)
+
+        return JsonResponse({
+            "status": 200,
+            "message": f"Siswa dari angkatan {angkatan} berhasil ditambahkan ke kelas!",
+            "data": {
+                "kelasId": kelas.id,
+                "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
+                "siswa": [
+                    {"id": s.user.id, "name": s.name, "nisn": s.nisn, "username": s.username, "angkatan": s.angkatan, "isAssignedtoClass": s.isAssignedtoClass}
+                    for s in kelas.siswa.all()
+                ]
+            }
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat menambahkan siswa ke kelas: {str(e)}"}, status=500)
+
+
 @api_view(['GET'])
 def list_available_homeroom(request):
     """List all teachers, including both active and deleted, and show teachers without homeroom"""
@@ -562,6 +623,7 @@ def delete_siswa_from_kelas(request, kelas_id, siswa_id):
 
     except Exception as e:
         return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat menghapus siswa dari kelas: {str(e)}"}, status=500)
+
 
 
 '''
