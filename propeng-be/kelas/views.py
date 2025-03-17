@@ -1,10 +1,12 @@
 from django.http import JsonResponse
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from kelas.models import Kelas
 from kelas.models import Student
 from kelas.models import Teacher
 from tahunajaran.models import TahunAjaran
 import re
+from rest_framework.permissions import IsAuthenticated
+
 
 '''
 Cek Siswa Tertentu pada Suatu Angkatan
@@ -478,19 +480,26 @@ def update_wali_kelas(request, kelas_id):
         except Kelas.DoesNotExist:
             return JsonResponse({"status": 404, "errorMessage": "Kelas tidak ditemukan!"}, status=404)
 
-        # Simpan wali kelas sebelumnya sebelum perubahan
-        wali_kelas_sebelumnya = kelas.waliKelas
+        # Save previous homeroom teacher
+        previous_wali_kelas = kelas.waliKelas
 
-        if wali_kelas_id and Kelas.objects.filter(isActive=True, waliKelas_id=wali_kelas_id).exclude(id=kelas_id).exists():
-            return JsonResponse({"status": 400, "errorMessage": "Wali kelas sudah mengajar di kelas lain yang masih aktif!"}, status=400)
+        # If there's a previous homeroom teacher, clear their assignment
+        if previous_wali_kelas:
+            previous_teacher = Teacher.objects.get(user_id=previous_wali_kelas.user_id)
+            previous_teacher.homeroomId = None
+            previous_teacher.save()
 
-        if wali_kelas_id is not None:
-            if kelas.waliKelas_id:
-                Teacher.objects.filter(user_id=kelas.waliKelas).update(homeroomId=None)
-            Teacher.objects.filter(user_id=wali_kelas_id).update(homeroomId=kelas.id)
-
-        if wali_kelas_id is None and kelas.waliKelas:
-            Teacher.objects.filter(user_id=kelas.waliKelas).update(homeroomId=None)
+        # If a new homeroom teacher is specified
+        if wali_kelas_id:
+            try:
+                new_teacher = Teacher.objects.get(user_id=wali_kelas_id)
+                kelas.waliKelas = new_teacher
+                new_teacher.homeroomId = kelas
+                new_teacher.save()
+            except Teacher.DoesNotExist:
+                return JsonResponse({"status": 404, "errorMessage": "Guru tidak ditemukan!"}, status=404)
+        else:
+            kelas.waliKelas = None
 
         kelas.save()
 
@@ -500,15 +509,12 @@ def update_wali_kelas(request, kelas_id):
             "data": {
                 "idKelas": kelas.id,
                 "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
-                "idWaliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
-                "namaWaliKelas": f"{kelas.waliKelas.name}" if kelas.waliKelas else None,
-                "idWaliKelasSebelumnya": str(wali_kelas_sebelumnya) if wali_kelas_sebelumnya else None,
-                "namaWaliKelasSebelumnya": str(wali_kelas_sebelumnya.name) if wali_kelas_sebelumnya else None
+                "waliKelas": kelas.waliKelas.name if kelas.waliKelas else None
             }
         }, status=200)
 
     except Exception as e:
-        return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat mengupdate kelas: {str(e)}"}, status=500)
+        return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat mengupdate wali kelas: {str(e)}"}, status=500)
 
 @api_view(['PUT', 'PATCH'])
 def update_kelas(request, kelas_id):
@@ -587,29 +593,44 @@ def update_kelas(request, kelas_id):
 @api_view(['DELETE'])
 def delete_siswa_from_kelas(request, kelas_id, siswa_id):
     try:
+        print(f"Deleting student {siswa_id} from class {kelas_id}")  # Add debug print
+        
+        print("Student model fields:", [field.name for field in Student._meta.fields])
         try:
             kelas = Kelas.objects.get(id=kelas_id)
         except Kelas.DoesNotExist:
+            print(f"Class {kelas_id} not found")  # Add debug print
             return JsonResponse({"status": 404, "errorMessage": "Kelas tidak ditemukan!"}, status=404)
 
+        # Try to find the student by user_id (which appears to be the correct ID field)
         try:
-            siswa = kelas.siswa.get(user_id=siswa_id)
+            siswa = Student.objects.get(user_id=siswa_id)
+            print(f"Found student with user_id={siswa_id}")  # Add debug print
         except Student.DoesNotExist:
+            print(f"No student found with user_id={siswa_id}")  # Add debug print
+            return JsonResponse({"status": 404, "errorMessage": "Siswa tidak ditemukan!"}, status=404)
+
+        # Check if student is in the class
+        if not kelas.siswa.filter(user_id=siswa_id).exists():
+            print(f"Student {siswa_id} not in class {kelas_id}")  # Add debug print
             return JsonResponse({"status": 404, "errorMessage": "Siswa tidak ditemukan dalam kelas ini!"}, status=404)
 
         # Simpan data siswa sebelum dihapus
         siswa_sebelumnya = {
-            "id": siswa.user.id,
+            "id": siswa.user_id,  # Use user_id instead of id
             "name": siswa.name,
-            "nisn": siswa.nisn,
-            "username": siswa.username,
-            "isAssignedtoClass": siswa.isAssignedtoClass,
+            "nisn": siswa.nisn if hasattr(siswa, 'nisn') else "",
+            "username": siswa.username if hasattr(siswa, 'username') else "",
+            "isAssignedtoClass": siswa.isAssignedtoClass if hasattr(siswa, 'isAssignedtoClass') else False,
         }
 
         # Hapus siswa dari kelas dan update isAssignedtoClass
         kelas.siswa.remove(siswa)
-        siswa.isAssignedtoClass = False
-        siswa.save()
+        if hasattr(siswa, 'isAssignedtoClass'):
+            siswa.isAssignedtoClass = False
+            siswa.save()
+        
+        print(f"Successfully removed student {siswa_id} from class {kelas_id}")  # Add debug print
 
         return JsonResponse({
             "status": 200,
@@ -622,39 +643,59 @@ def delete_siswa_from_kelas(request, kelas_id, siswa_id):
         }, status=200)
 
     except Exception as e:
+        print(f"Error: {str(e)}")  # Add debug print
         return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat menghapus siswa dari kelas: {str(e)}"}, status=500)
-
-
 
 '''
 [PBI 12] Menghapus Kelas (Soft Delete)
 '''
-@api_view(['DELETE'])
-def delete_kelas(request, kelas_id):
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def delete_multiple_kelas(request):
     try:
-        # Ambil kelas berdasarkan ID
-        kelas = Kelas.objects.get(id=kelas_id)
-
-        # Set isActive menjadi False (Soft Delete)
-        kelas.isActive = False
-
-        # Set isAssignedtoClass = False untuk semua siswa dalam kelas ini
-        kelas.siswa.update(isAssignedtoClass=False)
-
-        wali_kelas = kelas.waliKelas
-        if wali_kelas and wali_kelas.homeroomId == kelas.id:
-            wali_kelas.homeroomId = None
-        wali_kelas.save()
-
-        kelas.save()
-
+        data = request.data
+        class_ids = data.get('class_ids', [])
+        
+        if not class_ids:
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": "Tidak ada kelas yang dipilih untuk dihapus."
+            }, status=400)
+        
+        # Get all classes to be deleted
+        classes = Kelas.objects.filter(id__in=class_ids)
+        
+        if not classes.exists():
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": "Kelas tidak ditemukan."
+            }, status=404)
+        
+        deleted_count = 0
+        for kelas in classes:
+            # Set isActive to False (Soft Delete)
+            kelas.isActive = False
+            
+            # Set isAssignedtoClass = False for all students in this class
+            kelas.siswa.update(isAssignedtoClass=False)
+            
+            # Update homeroom teacher
+            wali_kelas = kelas.waliKelas
+            if wali_kelas and wali_kelas.homeroomId and wali_kelas.homeroomId.id == kelas.id:
+                wali_kelas.homeroomId = None
+                wali_kelas.save()
+            
+            kelas.save()
+            deleted_count += 1
+        
         return JsonResponse({
             "status": 200,
-            "message": f"Kelas {kelas.namaKelas} berhasil dinonaktifkan."
+            "message": f"{deleted_count} kelas berhasil dinonaktifkan.",
+            "deletedCount": deleted_count
         }, status=200)
-
-    except Kelas.DoesNotExist:
+    
+    except Exception as e:
         return JsonResponse({
-            "status": 400,
-            "errorMessage": "Kelas tidak ditemukan."
-        }, status=400)
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)
