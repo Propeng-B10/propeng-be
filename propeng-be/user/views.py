@@ -175,7 +175,7 @@ def list_active_teacher(request):
                 "name": teacher.name,
                 "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
-                "angkatan":teacher.angkatan,
+                "angkatan":teacher.angkatan.angkatan,
                 "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
                 "status": "Active"
             }
@@ -265,7 +265,9 @@ def list_student(request):
 def list_active_student(request):
     """List only active students (not deleted)"""
     try:
+        print("yes")
         students = Student.objects.filter(isDeleted=False)
+        print(students)
         student_list = []
         
         for student in students:
@@ -275,7 +277,7 @@ def list_active_student(request):
                 "isAssignedtoClass": student.isAssignedtoClass,
                 "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
-                "angkatan": student.angkatan,
+                "angkatan": student.angkatan.angkatan,
                 "status": "Active"
             }
             student_list.append(student_data)
