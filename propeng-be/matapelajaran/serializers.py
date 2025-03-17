@@ -7,14 +7,14 @@ from tahunajaran.models import TahunAjaran
 class MataPelajaranSerializer(serializers.ModelSerializer):
     print("🔹 MataPelajaranSerializer")
     id = serializers.UUIDField(read_only=True)
-    kategoriMatpel = serializers.ChoiceField(choices=MataPelajaran.MATKUL_CHOICES)
+    kategoriMatpel = serializers.ChoiceField(choices=MataPelajaran.MATPEL_CATEGORY)
     teacher = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
     siswa_terdaftar = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)
     tahunAjaran = serializers.IntegerField(write_only=True)
     
     class Meta:
         model = MataPelajaran
-        fields = ['id', 'kategoriMatpel', 'nama', 'kode', 'tahunAjaran', 'teacher', 'siswa_terdaftar', 'is_archived']
+        fields = ['id', 'kategoriMatpel', 'nama', 'angkatan', 'kode', 'tahunAjaran', 'teacher', 'siswa_terdaftar', 'is_archived']
         read_only_fields = ['kode']
 
     def validate_teacher(self, value):

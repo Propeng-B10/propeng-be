@@ -214,3 +214,45 @@ def archive_mata_pelajaran(request, pk):
             "message": f"Failed to archive MataPelajaran: {str(e)}",
             "error": str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_mata_pelajaran_by_id(request, pk):
+    """Retrieve a specific MataPelajaran by ID"""
+    try:
+        matapelajaran = MataPelajaran.objects.get(pk=pk)
+    except MataPelajaran.DoesNotExist:
+        return Response({
+            "status": 404,
+            "message": "MataPelajaran not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    try:
+        teacher_name = matapelajaran.teacher.name if matapelajaran.teacher else None
+        student_count = matapelajaran.siswa_terdaftar.count()
+        
+        matapelajaran_data = {
+            "id": matapelajaran.id,
+            "nama": matapelajaran.nama,
+            "kategoriMatpel": matapelajaran.get_kategoriMatpel_display(),
+            "kode": matapelajaran.kode,
+            "tahunAjaran": matapelajaran.tahunAjaran.tahunAjaran if matapelajaran.tahunAjaran else None,
+            "teacher": {
+                "id": matapelajaran.teacher.user_id if matapelajaran.teacher else None,
+                "name": teacher_name
+            },
+            "jumlah_siswa": student_count,
+            "status": "Archived" if matapelajaran.is_archived else "Active"
+        }
+        
+        return Response({
+            "status": 200,
+            "message": "Successfully retrieved MataPelajaran",
+            "data": matapelajaran_data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error retrieving MataPelajaran: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

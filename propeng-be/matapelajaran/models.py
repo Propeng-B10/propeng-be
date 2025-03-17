@@ -5,19 +5,15 @@ import uuid
 
 class MataPelajaran(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # Add UUID field
-    MATKUL_CHOICES = [
-        ("BING_WAJIB", "Bahasa Inggris Wajib"),
-        ("BING_PEMINATAN", "Bahasa Inggris Peminatan"),
-        ("MTK_WAJIB", "Matematika Wajib"),
-        ("MTK_PEMINATAN", "Matematika Peminatan"),
-        ("FISIKA", "Fisika"),
-        ("KIMIA", "Kimia"),
-        ("BIOLOGI", "Biologi"),
+    MATPEL_CATEGORY = [
+        ("Wajib", "Wajib"), 
+        ("Peminatan", "Peminatan")
     ]
 
-    nama = models.TextField(max_length=100)
-    kategoriMatpel = models.CharField(max_length=50, choices=MATKUL_CHOICES)
+    nama = models.CharField(max_length=100, default="Default Subject", blank=False, null=False)
+    kategoriMatpel = models.CharField(max_length=10, choices=MATPEL_CATEGORY, default="Wajib")
     kode = models.CharField(max_length=20, unique=False, blank=True)
+    angkatan = models.IntegerField(null=False, blank=False, default=2023)
     tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)
     
     teacher = models.ForeignKey(
