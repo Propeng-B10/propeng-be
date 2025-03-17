@@ -375,6 +375,33 @@ def detail_kelas(request, kelas_id):
 '''
 
 @api_view(['PUT', 'PATCH'])
+def update_nama_kelas(request, kelas_id):
+    try:
+        data = request.data
+        nama_kelas = data.get("namaKelas")
+
+        try:
+            kelas = Kelas.objects.get(id=kelas_id)
+        except Kelas.DoesNotExist:
+            return JsonResponse({"status": 404, "errorMessage": "Kelas tidak ditemukan!"}, status=404)
+
+        # Update data kelas
+        kelas.namaKelas = nama_kelas if nama_kelas is not None else kelas.namaKelas
+        kelas.save()
+
+        return JsonResponse({
+            "status": 200,
+            "message": "Nama kelas berhasil diubah!",
+            "data": {
+                "id": kelas.id,
+                "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
+            }
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat mengupdate nama kelas: {str(e)}"}, status=500)
+
+@api_view(['PUT', 'PATCH'])
 def update_kelas(request, kelas_id):
     try:
         data = request.data
