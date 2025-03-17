@@ -23,8 +23,7 @@ def list_available_student_by_angkatan(request, angkatan):
         siswa_list = Student.objects.filter(angkatan=angkatan)
 
         # Ambil siswa yang sudah masuk dalam kelas
-        siswa_dalam_kelas = Kelas.objects.values_list('siswa', flat=True)  # Mengambil daftar siswa dalam kelas
-        siswa_tanpa_kelas = siswa_list.exclude(user_id__in=siswa_dalam_kelas)  # Filter siswa yang tidak ada dalam kelas
+        siswa_tanpa_kelas = siswa_list.filter(isAssignedtoClass=False)
 
         if not siswa_tanpa_kelas.exists():
             return JsonResponse({
@@ -39,6 +38,7 @@ def list_available_student_by_angkatan(request, angkatan):
                 {
                     "id": s.user.id,
                     "name": s.name,
+                    "isAssignedtoClass": s.isAssignedtoClass,
                     "nisn": s.nisn,
                     "username": s.username,
                     "angkatan": s.angkatan
@@ -186,6 +186,9 @@ def create_kelas(request):
         )
 
         kelas.siswa.set(siswa_list)
+        # Update siswa yang masuk ke kelas baru sebagai `isAssignedtoClass = True`
+        Student.objects.filter(user_id__in=siswa_ids).update(isAssignedtoClass=True)
+
         waliKelas.homeroomId = kelas
         waliKelas.save()
 
@@ -255,6 +258,7 @@ def list_kelas(request):
                     {
                         "id": s.user.id,
                         "name": s.name,
+                        "isAssignedtoClass": s.isAssignedtoClass,
                         "nisn": s.nisn,
                         "username": s.username
                     } for s in k.siswa.all()
@@ -297,6 +301,7 @@ def detail_kelas(request, kelas_id):
                     {
                         "id": s.user.id,
                         "name": s.name,
+                        "isAssignedtoClass": s.isAssignedtoClass,
                         "nisn": s.nisn,
                         "username": s.username
                     } for s in kelas.siswa.all()
@@ -322,6 +327,7 @@ def detail_kelas(request, kelas_id):
             "siswa": [
                     {
                         "id": s.user.id,
+                        "isAssignedtoClass": s.isAssignedtoClass,
                         "name": s.name,
                         "nisn": s.nisn,
                         "username": s.username
@@ -346,6 +352,7 @@ def detail_kelas(request, kelas_id):
             "siswa": [
                     {
                         "id": s.user.id,
+                        "isAssignedtoClass": s.isAssignedtoClass,
                         "name": s.name,
                         "nisn": s.nisn,
                         "username": s.username
@@ -401,6 +408,8 @@ def update_kelas(request, kelas_id):
         if wali_kelas_id is None and kelas.waliKelas:
             Teacher.objects.filter(user_id=kelas.waliKelas).update(homeroomId=None)
 
+        
+        # Update data kelas
         kelas.namaKelas = nama_kelas if nama_kelas is not None else kelas.namaKelas
         kelas.waliKelas_id = wali_kelas_id if wali_kelas_id is not None else kelas.waliKelas_id
 
@@ -408,7 +417,13 @@ def update_kelas(request, kelas_id):
             kelas.tahunAjaran, _ = TahunAjaran.objects.get_or_create(tahunAjaran=tahun_ajaran) if tahun_ajaran else (None, False)
 
         if students_id:
+            # Set siswa yang tidak ada dalam daftar baru ke isAssignedtoClass=False
+            removed_students = kelas.siswa.exclude(user_id__in=students_id)
+            removed_students.update(isAssignedtoClass=False)
+
+            # Update daftar siswa dalam kelas
             kelas.siswa.set(existing_students)
+            existing_students.update(isAssignedtoClass=True)
 
         kelas.save()
 
@@ -424,7 +439,7 @@ def update_kelas(request, kelas_id):
                 "isActive": kelas.isActive,
                 "angkatan": kelas.angkatan if kelas.angkatan >= 1000 else kelas.angkatan + 2000,
                 "siswa": [
-                    {"id": s.user.id, "name": s.name, "nisn": s.nisn, "username": s.username}
+                    {"id": s.user.id, "name": s.name, "nisn": s.nisn, "username": s.username, "isAssignedtoClass": s.isAssignedtoClass,}
                     for s in kelas.siswa.all()
                 ]
             }
@@ -444,6 +459,9 @@ def delete_kelas(request, kelas_id):
 
         # Set isActive menjadi False (Soft Delete)
         kelas.isActive = False
+
+        # Set isAssignedtoClass = False untuk semua siswa dalam kelas ini
+        kelas.siswa.update(isAssignedtoClass=False)
 
         wali_kelas = kelas.waliKelas
         if wali_kelas and wali_kelas.homeroomId == kelas.id:

@@ -238,6 +238,7 @@ def list_student(request):
             student_data = {
                 "id": student.user_id,
                 "name": student.name,
+                "isAssignedtoClass": student.isAssignedtoClass,
                 "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
                 "angkatan": student.angkatan,
@@ -270,6 +271,7 @@ def list_active_student(request):
             student_data = {
                 "id": student.user_id,
                 "name": student.name,
+                "isAssignedtoClass": student.isAssignedtoClass,
                 "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
                 "angkatan": student.angkatan,

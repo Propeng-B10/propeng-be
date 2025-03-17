@@ -43,6 +43,7 @@ class Student(models.Model):
     username = models.CharField(null=True, blank=True, max_length=32)
     nisn = models.CharField(null=True, blank=True, max_length=20)
     angkatan = models.IntegerField(null=False, blank=False, default=2023)
+    isAssignedtoClass = models.BooleanField(default=False)
     isActive = models.BooleanField(default=True)
     isDeleted = models.BooleanField(default=False)
     createdAt = models.DateTimeField(default=timezone.now)
