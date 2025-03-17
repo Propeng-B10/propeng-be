@@ -235,6 +235,7 @@ def list_kelas(request):
                 "errorMessage": "Belum ada kelas yang terdaftar! Silahkan menambahkan kelas baru."
             }, status = 400)
 
+
     ''' Ini pertama ngecek isEmpty dulu, 
     nah kalau False baru deh ambil data.json dari "data" '''
     return JsonResponse({
@@ -257,7 +258,7 @@ def list_kelas(request):
                         "nisn": s.nisn,
                         "username": s.username
                     } for s in k.siswa.all()
-                ]}for k in kelas_list
+                ]}for k in kelas
                 
 
             ]
@@ -365,82 +366,54 @@ def detail_kelas(request, kelas_id):
 '''
 [PBI 11] Mengubah Informasi Kelas
 '''
+
 @api_view(['PUT', 'PATCH'])
 def update_kelas(request, kelas_id):
     try:
-        # Ambil data dari request
         data = request.data
         nama_kelas = data.get("namaKelas")
         wali_kelas_id = data.get("waliKelas")
         students_id = data.get("students", [])
         tahun_ajaran = data.get("tahunAjaran")
 
-        # Pastikan kelas yang ingin diupdate ada
         try:
             kelas = Kelas.objects.get(id=kelas_id)
         except Kelas.DoesNotExist:
-            return JsonResponse({
-                "status": 404,
-                "errorMessage": "Kelas tidak ditemukan!"
-            }, status=404)
+            return JsonResponse({"status": 404, "errorMessage": "Kelas tidak ditemukan!"}, status=404)
 
-        # Memastikan wali kelas hanya ada di satu kelas aktif
         if wali_kelas_id and Kelas.objects.filter(isActive=True, waliKelas_id=wali_kelas_id).exclude(id=kelas_id).exists():
-            return JsonResponse({
-                "status": 400,
-                "errorMessage": "Wali kelas sudah mengajar di kelas lain yang masih aktif!"
-            }, status=400)
+            return JsonResponse({"status": 400, "errorMessage": "Wali kelas sudah mengajar di kelas lain yang masih aktif!"}, status=400)
 
-        # Memastikan apakah siswa sudah masuk kelas lain yang masih aktif
-        existing_students = Student.objects.filter(id__in=students_id)
-        students_in_active_classes = set(
-            Kelas.objects.filter(isActive=True, siswa__in=existing_students)
-            .exclude(id=kelas_id)
-            .values_list("siswa__id", flat=True)
-        )
+        if students_id:
+            existing_students = Student.objects.filter(user_id__in=students_id)
+            students_in_active_classes = set(Kelas.objects.filter(isActive=True, siswa__in=existing_students)
+                                             .exclude(id=kelas_id)
+                                             .values_list("siswa__user_id", flat=True))
+            students_already_in_class = set(students_id) & students_in_active_classes
+            if students_already_in_class:
+                return JsonResponse({"status": 400, "errorMessage": f"Siswa dengan ID {list(students_already_in_class)} sudah masuk ke kelas lain yang masih aktif!"}, status=400)
 
-        students_already_in_class = set(students_id) & students_in_active_classes
-
-        if students_already_in_class:
-            return JsonResponse({
-                "status": 400,
-                "errorMessage": f"Siswa dengan ID {list(students_already_in_class)} sudah masuk ke kelas lain yang masih aktif!"
-            }, status=400)
-
-        # Update homeroomId di model Teacher
         if wali_kelas_id is not None:
-            Teacher.objects.filter(id=wali_kelas_id).update(homeroomId=kelas.id)
+            if kelas.waliKelas_id:
+                Teacher.objects.filter(user_id=kelas.waliKelas).update(homeroomId=None)
+            Teacher.objects.filter(user_id=wali_kelas_id).update(homeroomId=kelas.id)
 
-        # Kalau wali kelas dihapus dari kelas, homeroomId-nya juga dihapus
         if wali_kelas_id is None and kelas.waliKelas:
-            Teacher.objects.filter(id=kelas.waliKelas_id).update(homeroomId=None)
+            Teacher.objects.filter(user_id=kelas.waliKelas).update(homeroomId=None)
 
-        # Update data kelas jika ada perubahan
-        if nama_kelas is not None:
-            kelas.namaKelas = nama_kelas
-        if wali_kelas_id is not None:
-            kelas.waliKelas_id = wali_kelas_id
+        kelas.namaKelas = nama_kelas if nama_kelas is not None else kelas.namaKelas
+        kelas.waliKelas_id = wali_kelas_id if wali_kelas_id is not None else kelas.waliKelas_id
+
         if tahun_ajaran is not None:
-            if tahun_ajaran:  # Jika tidak kosong, cari instance TahunAjaran
-                try:
-                    tahun_ajaran_instance, _ = TahunAjaran.objects.get_or_create(
-                        tahunAjaran=tahun_ajaran
-                    )
-                    kelas.tahunAjaran = tahun_ajaran_instance
-                except TahunAjaran.DoesNotExist:
-                    return JsonResponse({
-                        "status": 400,
-                        "errorMessage": "Tahun ajaran tidak ditemukan!"
-                    }, status=400)
-            else:  
-                kelas.tahunAjaran = None  # Jika null, hapus tahun ajaran
-        if students_id is not None:
+            kelas.tahunAjaran, _ = TahunAjaran.objects.get_or_create(tahunAjaran=tahun_ajaran) if tahun_ajaran else (None, False)
+
+        if students_id:
             kelas.siswa.set(existing_students)
 
         kelas.save()
 
         return JsonResponse({
-            "status": 201,
+            "status": 200,
             "message": "Kelas berhasil diubah!",
             "data": {
                 "id": kelas.id,
@@ -451,21 +424,14 @@ def update_kelas(request, kelas_id):
                 "isActive": kelas.isActive,
                 "angkatan": kelas.angkatan if kelas.angkatan >= 1000 else kelas.angkatan + 2000,
                 "siswa": [
-                    {
-                        "id": s.user.id,
-                        "name": s.name,
-                        "nisn": s.nisn,
-                        "username": s.username,
-                    } for s in kelas.siswa.all()
+                    {"id": s.user.id, "name": s.name, "nisn": s.nisn, "username": s.username}
+                    for s in kelas.siswa.all()
                 ]
             }
-        }, status=201)
+        }, status=200)
 
     except Exception as e:
-        return JsonResponse({
-            "status": 500,
-            "errorMessage": f"Terjadi kesalahan saat mengupdate kelas: {str(e)}"
-        }, status=500)
+        return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat mengupdate kelas: {str(e)}"}, status=500)
 
 '''
 [PBI 12] Menghapus Kelas (Soft Delete)
