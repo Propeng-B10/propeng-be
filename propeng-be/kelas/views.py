@@ -125,7 +125,8 @@ def list_available_homeroom(request):
                 "status": 404,
                 "errorMessage": "Tidak ada guru yang tidak menjadi wali kelas."
             }, status=404)
-
+        # test commit
+    
         teacher_list = []
         for teacher in teachers_without_homeroom:
             teacher_data = {

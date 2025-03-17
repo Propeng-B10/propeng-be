@@ -1,6 +1,9 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from user.models import User
+from user.models import *
+from tahunajaran.models import *
+from kelas.models import *
+
 
 class Command(BaseCommand):
     help = 'Creates a superuser account with predefined credentials'
@@ -29,4 +32,4 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('Password: testpass1234'))
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'Error creating superuser: {str(e)}')) 
+            self.stdout.write(self.style.ERROR(f'Error creating superuser: {str(e)}'))

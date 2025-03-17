@@ -2,7 +2,8 @@ from queue import Full
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from django.contrib.auth.hashers import make_password
-from .models import User, Student, Teacher, TahunAjaran
+from .models import User, Student, Teacher
+from tahunajaran.models import *
 from django.contrib.auth import get_user_model
 import re
 from django.contrib.auth.hashers import make_password
@@ -63,6 +64,10 @@ class UserSerializer(serializers.ModelSerializer):
         nomorInduk = validated_data.pop('nomorInduk', None)
         angkatan = validated_data.pop('angkatan', None)
         try:
+            AngkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
+        except:
+            raise serializers.ValidationError({"status":"400","Message":"Gagal membuat angkatan"})
+        try:
             nomorInduk = int(nomorInduk)
         except:
             raise serializers.ValidationError({"status":"400","Message":"User with that Nomor Induk can't be numbers"})
@@ -102,13 +107,13 @@ class UserSerializer(serializers.ModelSerializer):
             # tahun_ajaran_instance, created = TahunAjaran.objects.get_or_create(angkatan=angkatan)
 
             # Buat Student dengan instance TahunAjaran
-            Student.objects.create(user=user, nisn=nomorInduk, name=name, angkatan=angkatan)
+            Student.objects.create(user=user, nisn=nomorInduk, name=name, angkatan=AngkatanObj)
 
         elif role == "teacher":
             if Teacher.objects.filter(nisp=nomorInduk).exists():
                 user.delete()
                 raise serializers.ValidationError({"status":"400","Message":"Teacher with that NISP numbers already exist"})
-            Teacher.objects.create(user=user, nisp=nomorInduk, username=user.username, name=name, angkatan=angkatan)
+            Teacher.objects.create(user=user, nisp=nomorInduk, username=user.username, name=name, angkatan=AngkatanObj)
             
         return user
 

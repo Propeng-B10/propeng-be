@@ -64,7 +64,8 @@ def list_matapelajaran(request):
                     "name": teacher_name
                 },
                 "jumlah_siswa": student_count,
-                "status": "Archived" if mapel.is_archived else "Active"
+                "status": "Archived" if mapel.is_archived else "Active",
+                "angkatan":mapel.angkatan
             }
             matapelajaran_list.append(mapel_data)
             
@@ -159,6 +160,7 @@ def delete_mata_pelajaran(request, pk):
         matapelajaran_info = {
             "id": matapelajaran.id,
             "nama": matapelajaran.nama,
+            "angkatan":matapelajaran.angkatan,
             "kategoriMatpel": matapelajaran.get_kategoriMatpel_display(),
             "tahunAjaran": matapelajaran.tahunAjaran.tahunAjaran if matapelajaran.tahunAjaran else None
         }

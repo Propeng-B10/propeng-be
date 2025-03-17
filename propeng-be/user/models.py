@@ -1,6 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from tahunajaran.models import TahunAjaran
+from tahunajaran.models import TahunAjaran, Angkatan
 from django.utils import timezone
 
 class User(AbstractUser):
@@ -42,7 +42,7 @@ class Student(models.Model):
     name = models.CharField(null=True, blank=True, max_length=32)
     username = models.CharField(null=True, blank=True, max_length=32)
     nisn = models.CharField(null=True, blank=True, max_length=20)
-    angkatan = models.IntegerField(null=False, blank=False, default=2023)
+    angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True)
     isAssignedtoClass = models.BooleanField(default=False)
     isActive = models.BooleanField(default=True)
     isDeleted = models.BooleanField(default=False)
@@ -70,11 +70,11 @@ class Teacher(models.Model):
         blank=True,
         related_name='waliKelasDari'
     )
-    angkatan = models.IntegerField(null=False, blank=False, default=2023)
     isActive = models.BooleanField(default=True)
     isDeleted = models.BooleanField(default=False)
     createdAt = models.DateTimeField(default=timezone.now)
     updatedAt = models.DateTimeField(auto_now=True)
+    angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True)
     
 
     def save(self, *args, **kwargs):

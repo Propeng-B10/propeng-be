@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from rest_framework import status, generics
 from .models import Student, Teacher, User
 from kelas.models import Kelas
+from tahunajaran.models import Angkatan
 import re
 from django.contrib.auth.hashers import make_password
 from django.http import JsonResponse
@@ -72,8 +73,8 @@ def list_teacher(request):
                 "name": teacher.name,
                 "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
+                "angkatan":teacher.angkatan,
                 "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
-                "angkatan": teacher.angkatan,
                 "status": "Deleted" if teacher.isDeleted else "Active"
             }
             teacher_list.append(teacher_data)
@@ -131,8 +132,8 @@ def profile(request, id):
                 profile_data.update({
                     "name": teacher.name,
                     "nisp": teacher.nisp,
+                    "angkatan":teacher.angkatan,
                     "homeroomId": teacher.homeroomId,
-                    "angkatan": teacher.angkatan,
                     "status": "Deleted" if teacher.isDeleted else "Active"
                 })
             else:
@@ -174,8 +175,8 @@ def list_active_teacher(request):
                 "name": teacher.name,
                 "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
+                "angkatan":teacher.angkatan,
                 "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
-                "angkatan": teacher.angkatan,
                 "status": "Active"
             }
             teacher_list.append(teacher_data)
@@ -207,8 +208,8 @@ def list_homeroom_teachers(request):
                 "name": teacher.name,
                 "username": teacher.user.username,
                 "nisp": teacher.nisp,
+                "angkatan":teacher.angkatan,
                 "homeroomId": teacher.homeroomId,
-                "angkatan": teacher.angkatan,
                 "status": "Deleted" if teacher.isDeleted else "Active"
             }
             teacher_list.append(teacher_data)
@@ -358,7 +359,7 @@ def protected_view(request):
 
         # Initialize response data
         user_data = {
-            "user_id": user.id,  # Store the original user ID
+            "id": user.id,  # Store the original user ID
             "username": user.username,
             "role": user.role
         }
@@ -486,7 +487,8 @@ def delete_user(request, id):
                         "teacher_id": teacher.user_id,
                         "username": user.username,
                         "name": teacher.name,
-                        "nisp": teacher.nisp
+                        "nisp": teacher.nisp,
+                        "angkatan" : teacher.angkatan
                     }
                 }, status=status.HTTP_200_OK)
             else:
@@ -561,7 +563,7 @@ def edit_user(request, id):
                         }, status=status.HTTP_400_BAD_REQUEST)
                     updated_fields.append("nisn")
                     student.nisn = data["nisn"]
-                if "nisn" in data and data["nisn"] != student.nisn:
+                if "angkatan" in data and data["angkatan"]:
                     updated_fields.append("angkatan")
                     student.angkatan = data["angkatan"]
                 
@@ -579,6 +581,7 @@ def edit_user(request, id):
                     "teacher_id": teacher.user_id,
                     "name": teacher.name,
                     "nisp": teacher.nisp,
+                    "angkatan":teacher.angkatan,
                     "status": "Deleted" if teacher.isDeleted else "Active"
                 })
                 
@@ -594,6 +597,9 @@ def edit_user(request, id):
                         }, status=status.HTTP_400_BAD_REQUEST)
                     updated_fields.append("nisp")
                     teacher.nisp = data["nisp"]
+                if "angkatan" in data:
+                    updated_fields.append("angkatan")
+                    teacher.angkatan = data["angkatan"]
                 
                 teacher.save()
             else:
@@ -628,6 +634,7 @@ def edit_user(request, id):
                 "teacher_id": teacher.user_id,
                 "name": teacher.name,
                 "nisp": teacher.nisp,
+                "angkatan":teacher.angkatan,
                 "status": "Deleted" if teacher.isDeleted else "Active"
             })
 
@@ -661,10 +668,24 @@ def list_users(request):
     user_list = []
     
     for user in users:
+        if user.role == 'student':
+            try:
+                student = Student.objects.get(user=user)
+                if student.isDeleted:
+                    continue
+            except Student.DoesNotExist:
+                pass
+        elif user.role == 'teacher':
+            try:
+                teacher = Teacher.objects.get(user=user)
+                if teacher.isDeleted:
+                    continue
+            except Teacher.DoesNotExist:
+                pass
+
         user_data = {
             'id': user.id,
             'username': user.username,
-            'email': user.email,
             'role': user.role,
             'is_active': user.is_active,
             'date_joined': user.date_joined
@@ -672,14 +693,13 @@ def list_users(request):
         
         # Add role-specific data
         if user.role == 'student':
+            angkatan = Angkatan
             try:
                 student = Student.objects.get(user=user)
                 user_data.update({
                     'name': student.name,
-                    'nisn': student.nisn,
-                    'angkatan': student.angkatan,
                     'isActive': student.isActive,
-                    'isDeleted': student.isDeleted
+                    'angkatan':student.angkatan
                 })
             except Student.DoesNotExist:
                 pass
@@ -688,11 +708,8 @@ def list_users(request):
                 teacher = Teacher.objects.get(user=user)
                 user_data.update({
                     'name': teacher.name,
-                    'nisp': teacher.nisp,
-                    'angkatan': teacher.angkatan,
                     'isActive': teacher.isActive,
-                    'isDeleted': teacher.isDeleted,
-                    'homeroomId': teacher.homeroomId
+                    'angkatan':teacher.angkatan,
                 })
             except Teacher.DoesNotExist:
                 pass
