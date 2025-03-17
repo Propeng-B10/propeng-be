@@ -1,6 +1,6 @@
 from django.db import models
 from user.models import Teacher, Student
-from tahunajaran.models import TahunAjaran
+from tahunajaran.models import TahunAjaran, Angkatan
 import uuid
 
 class MataPelajaran(models.Model):
@@ -19,6 +19,7 @@ class MataPelajaran(models.Model):
     kategoriMatpel = models.CharField(max_length=50, choices=MATKUL_CHOICES)
     kode = models.CharField(max_length=20, unique=False, blank=True)
     tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)
+    angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True)
     
     teacher = models.ForeignKey(
         Teacher, 

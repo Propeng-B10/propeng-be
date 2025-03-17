@@ -87,7 +87,7 @@ class CustomTeacherAdminForm(forms.ModelForm):
 class CustomTeacherAdmin(admin.ModelAdmin):
     form = CustomUserAdminForm
     model = User
-    list_display = ('name', 'username', 'nisp', 'homeroomId', 'angkatan', 'isActive', 'isDeleted')
+    list_display = ('name', 'username', 'nisp', 'homeroomId', 'isActive', 'isDeleted')
     # role = 'teacher'
     # Include custom fields in the admin form
     fieldsets = (
