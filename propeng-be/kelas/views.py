@@ -234,8 +234,6 @@ def list_kelas(request):
                 "status": 400,
                 "errorMessage": "Belum ada kelas yang terdaftar! Silahkan menambahkan kelas baru."
             }, status = 400)
-    
-    kelas_list = Kelas.objects.all()
 
     ''' Ini pertama ngecek isEmpty dulu, 
     nah kalau False baru deh ambil data.json dari "data" '''
