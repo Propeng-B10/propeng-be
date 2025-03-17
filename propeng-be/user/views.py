@@ -73,7 +73,7 @@ def list_teacher(request):
                 "name": teacher.name,
                 "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
-                "angkatan":teacher.angkatan,
+                "angkatan": teacher.angkatan.angkatan if teacher.angkatan else None, 
                 "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
                 "status": "Deleted" if teacher.isDeleted else "Active"
             }
@@ -117,7 +117,7 @@ def profile(request, id):
                 profile_data.update({
                     "name": student.name,
                     "nisn": student.nisn,
-                    "angkatan": student.angkatan,
+                    "angkatan": student.angkatan.angkatan if student.angkatan else None,
                     "status": "Deleted" if student.isDeleted else "Active"
                 })
             else:
@@ -132,7 +132,7 @@ def profile(request, id):
                 profile_data.update({
                     "name": teacher.name,
                     "nisp": teacher.nisp,
-                    "angkatan":teacher.angkatan,
+                    "angkatan":teacher.angkatan.angkatan if teacher.angkatan else None,
                     "homeroomId": teacher.homeroomId,
                     "status": "Deleted" if teacher.isDeleted else "Active"
                 })
@@ -175,7 +175,7 @@ def list_active_teacher(request):
                 "name": teacher.name,
                 "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
-                "angkatan":teacher.angkatan,
+                "angkatan":teacher.angkatan.angkatan if teacher.angkatan else None,
                 "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
                 "status": "Active"
             }
@@ -208,7 +208,7 @@ def list_homeroom_teachers(request):
                 "name": teacher.name,
                 "username": teacher.user.username,
                 "nisp": teacher.nisp,
-                "angkatan":teacher.angkatan,
+                "angkatan":teacher.angkatan.angkatan if teacher.angkatan else None,
                 "homeroomId": teacher.homeroomId,
                 "status": "Deleted" if teacher.isDeleted else "Active"
             }
@@ -242,7 +242,7 @@ def list_student(request):
                 "isAssignedtoClass": student.isAssignedtoClass,
                 "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
-                "angkatan": student.angkatan,
+                "angkatan": student.angkatan.angkatan if student.angkatan else None,
                 "status": "Deleted" if student.isDeleted else "Active"
             }
             student_list.append(student_data)
@@ -275,7 +275,7 @@ def list_active_student(request):
                 "isAssignedtoClass": student.isAssignedtoClass,
                 "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
-                "angkatan": student.angkatan,
+                "angkatan": student.angkatan.angkatan if student.angkatan else None,
                 "status": "Active"
             }
             student_list.append(student_data)
@@ -371,7 +371,7 @@ def protected_view(request):
                 user_data["name"] = student.name
                 user_data["id"] = student.user_id  # Use student ID
                 user_data["nisn"] = student.nisn
-                user_data["angkatan"] = student.angkatan
+                user_data["angkatan"] = student.angkatan.angkatan if student.angkatan else None
             else:
                 return Response({"error": "Student record not found"}, status=404)
 
@@ -382,7 +382,7 @@ def protected_view(request):
                 user_data["id"] = teacher.user_id  # Use teacher ID
                 user_data["nisp"] = teacher.nisp
                 user_data["homeroom_id"] = teacher.homeroomId
-                user_data["angkatan"] = teacher.angkatan
+                user_data["angkatan"] = teacher.angkatan.angkatan if teacher.angkatan else None
             else:
                 return Response({"error": "Teacher record not found"}, status=404)
 
@@ -488,7 +488,7 @@ def delete_user(request, id):
                         "username": user.username,
                         "name": teacher.name,
                         "nisp": teacher.nisp,
-                        "angkatan" : teacher.angkatan
+                        "angkatan" : teacher.angkatan.angkatan if teacher.angkatan else None
                     }
                 }, status=status.HTTP_200_OK)
             else:
@@ -548,7 +548,7 @@ def edit_user(request, id):
                     "name": student.name,
                     "nisn": student.nisn,
                     "status": "Deleted" if student.isDeleted else "Active",
-                    "angkatan": student.angkatan
+                    "angkatan": student.angkatan.angkatan if student.angkatan else None
                 })
                 
                 if "name" in data and data["name"] != student.name:

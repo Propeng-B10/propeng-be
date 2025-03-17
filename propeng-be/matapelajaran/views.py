@@ -65,7 +65,7 @@ def list_matapelajaran(request):
                 },
                 "jumlah_siswa": student_count,
                 "status": "Archived" if mapel.is_archived else "Active",
-                "angkatan":mapel.angkatan
+                "angkatan":mapel.angkatan.angkatan if mapel.angkatan else None
             }
             matapelajaran_list.append(mapel_data)
             
