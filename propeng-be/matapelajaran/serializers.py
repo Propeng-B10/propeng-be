@@ -6,7 +6,6 @@ from tahunajaran.models import TahunAjaran, Angkatan
 
 class MataPelajaranSerializer(serializers.ModelSerializer):
     print("🔹 MataPelajaranSerializer")
-    id = serializers.UUIDField(read_only=True)
     kategoriMatpel = serializers.ChoiceField(choices=MataPelajaran.MATPEL_CATEGORY)
     teacher = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
     siswa_terdaftar = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)

@@ -4,7 +4,6 @@ from tahunajaran.models import TahunAjaran, Angkatan
 import uuid
 
 class MataPelajaran(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # Add UUID field
     MATPEL_CATEGORY = [
         ("Wajib", "Wajib"), 
         ("Peminatan", "Peminatan")
