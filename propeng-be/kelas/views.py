@@ -385,6 +385,10 @@ def update_nama_kelas(request, kelas_id):
         except Kelas.DoesNotExist:
             return JsonResponse({"status": 404, "errorMessage": "Kelas tidak ditemukan!"}, status=404)
 
+
+        # Simpan nama kelas sebelumnya sebelum diubah
+        nama_kelas_sebelumnya = kelas.namaKelas
+
         # Update data kelas
         kelas.namaKelas = nama_kelas if nama_kelas is not None else kelas.namaKelas
         kelas.save()
@@ -395,11 +399,55 @@ def update_nama_kelas(request, kelas_id):
             "data": {
                 "id": kelas.id,
                 "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
+                "namaKelasSebelumnya": re.sub(r'^Kelas\s+', '', nama_kelas_sebelumnya, flags=re.IGNORECASE) if nama_kelas_sebelumnya else None,
             }
         }, status=200)
 
     except Exception as e:
         return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat mengupdate nama kelas: {str(e)}"}, status=500)
+
+@api_view(['PUT', 'PATCH'])
+def update_wali_kelas(request, kelas_id):
+    try:
+        data = request.data
+        wali_kelas_id = data.get("waliKelas")
+
+        try:
+            kelas = Kelas.objects.get(id=kelas_id)
+        except Kelas.DoesNotExist:
+            return JsonResponse({"status": 404, "errorMessage": "Kelas tidak ditemukan!"}, status=404)
+
+        # Simpan wali kelas sebelumnya sebelum perubahan
+        wali_kelas_sebelumnya = kelas.waliKelas
+
+        if wali_kelas_id and Kelas.objects.filter(isActive=True, waliKelas_id=wali_kelas_id).exclude(id=kelas_id).exists():
+            return JsonResponse({"status": 400, "errorMessage": "Wali kelas sudah mengajar di kelas lain yang masih aktif!"}, status=400)
+
+        if wali_kelas_id is not None:
+            if kelas.waliKelas_id:
+                Teacher.objects.filter(user_id=kelas.waliKelas).update(homeroomId=None)
+            Teacher.objects.filter(user_id=wali_kelas_id).update(homeroomId=kelas.id)
+
+        if wali_kelas_id is None and kelas.waliKelas:
+            Teacher.objects.filter(user_id=kelas.waliKelas).update(homeroomId=None)
+
+        kelas.save()
+
+        return JsonResponse({
+            "status": 200,
+            "message": "Wali kelas berhasil diubah!",
+            "data": {
+                "idKelas": kelas.id,
+                "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
+                "idWaliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
+                "namaWaliKelas": f"{kelas.waliKelas.name}" if kelas.waliKelas else None,
+                "idWaliKelasSebelumnya": str(wali_kelas_sebelumnya) if wali_kelas_sebelumnya else None,
+                "namaWaliKelasSebelumnya": str(wali_kelas_sebelumnya.name) if wali_kelas_sebelumnya else None
+            }
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat mengupdate kelas: {str(e)}"}, status=500)
 
 @api_view(['PUT', 'PATCH'])
 def update_kelas(request, kelas_id):
