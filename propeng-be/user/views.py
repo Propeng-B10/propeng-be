@@ -748,7 +748,7 @@ def list_users(request):
             'updatedAt':user.updatedAt
         }
     
-        
+        # test
         # Add role-specific data
         if user.role == 'student':
             try:
