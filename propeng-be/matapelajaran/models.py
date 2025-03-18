@@ -1,10 +1,10 @@
+from django.utils import timezone
 from django.db import models
 from user.models import Teacher, Student
 from tahunajaran.models import TahunAjaran, Angkatan
 import uuid
 
 class MataPelajaran(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # Add UUID field
     MATPEL_CATEGORY = [
         ("Wajib", "Wajib"), 
         ("Peminatan", "Peminatan")
@@ -15,6 +15,9 @@ class MataPelajaran(models.Model):
     kode = models.CharField(max_length=20, unique=False, blank=True)
     tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)
     angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True)
+    createdAt = models.DateTimeField(default=timezone.now)
+    updatedAt = models.DateTimeField(auto_now=True)
+    isDeleted = models.BooleanField(default=False)
     
     teacher = models.ForeignKey(
         Teacher, 
@@ -29,23 +32,10 @@ class MataPelajaran(models.Model):
         related_name="matapelajaran_diikuti"
     )
 
-    is_archived = models.BooleanField(default=False)
-
     def save(self, *args, **kwargs):
         if not self.kode:  # Auto-generate kode if not provided
             self.kode = f"{self.kategoriMatpel.replace('_', '').upper()}_{self.tahunAjaran}"
         super().save(*args, **kwargs)
-
-
-    def archive(self):
-        """Method to archive the subject"""
-        self.is_archived = True
-        self.save()
-
-    def unarchive(self):
-        """Method to unarchive the subject"""
-        self.is_archived = False
-        self.save()
 
     def __str__(self):
         return f"{self.get_kategoriMatpel_display()} ({self.kode}) - Tahun {self.tahunAjaran}"

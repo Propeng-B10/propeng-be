@@ -51,6 +51,46 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
             "name": "Michelle teacher",
             "nisp": "1234",
             "angkatan":angkatan_2022
+        },
+        {
+            "username": "tarreq.teacher",
+            "password": make_password("testpass1234"),
+            "role": "teacher",
+            "name": "Tarreq teacher",
+            "nisp": "12345",
+            "angkatan":angkatan_2022
+        },
+        {
+            "username": "tedyddi.teacher",
+            "password": make_password("testpass1234"),
+            "role": "teacher",
+            "name": "Teddy Teacher",
+            "nisp": "123456",
+            "angkatan":angkatan_2022
+        },
+        {
+            "username": "darryl.teacher",
+            "password": make_password("testpass1234"),
+            "role": "teacher",
+            "name": "Darryl teacher",
+            "nisp": "1234567",
+            "angkatan":angkatan_2022
+        },
+        {
+            "username": "ica.teacher",
+            "password": make_password("testpass1234"),
+            "role": "teacher",
+            "name": "Icha teacher",
+            "nisp": "12345678",
+            "angkatan":angkatan_2022
+        },
+        {
+            "username": "arshad.teacher",
+            "password": make_password("testpass1234"),
+            "role": "teacher",
+            "name": "Arshad teacher",
+            "nisp": "123456789",
+            "angkatan":angkatan_2022
         }
     ]
     
@@ -90,6 +130,48 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
             "role": "student",
             "name": "Icha Student",
             "nisn": "12345",
+        },
+        {
+            "username": "dien.student",
+            "password": make_password("testpass1234"),
+            "role": "student",
+            "name": "Dien Student",
+            "nisn": "123456",
+        },
+        {
+            "username": "darryl.student",
+            "password": make_password("testpass1234"),
+            "role": "student",
+            "name": "Darryl Student",
+            "nisn": "1234567",
+        },
+        {
+            "username": "tarreq.student",
+            "password": make_password("testpass1234"),
+            "role": "student",
+            "name": "Tarreq Student",
+            "nisn": "12345678",
+        },
+        {
+            "username": "tedyddi.student",
+            "password": make_password("testpass1234"),
+            "role": "student",
+            "name": "Teddy Student",
+            "nisn": "123456789",
+        },
+        {
+            "username": "misyele.student",
+            "password": make_password("testpass1234"),
+            "role": "student",
+            "name": "Michelle Student",
+            "nisn": "1234567890",
+        },
+        {
+            "username": "abil.student",
+            "password": make_password("testpass1234"),
+            "role": "student",
+            "name": "Abil Student",
+            "nisn": "12345678901",
         }
     ]
     
@@ -192,9 +274,18 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
     print(f'Created kelas: {kelas_data["namaKelas"]}')
     print('Database population completed!')
 
+
+def create_deployment_info(sender, **kwargs):
+    from user.models import DeploymentInfo
+    DeploymentInfo.objects.create()
+    print("✅ DeploymentInfo instance created!")
+
 class UserConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'user'
 
     def ready(self):
         post_migrate.connect(ensure_admin_exists_and_populate_data, sender=self)
+        post_migrate.connect(create_deployment_info, sender=self)
+
+

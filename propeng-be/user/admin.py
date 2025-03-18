@@ -5,6 +5,7 @@ from django.contrib.admin.sites import AdminSite
 from .models import User, Student, Teacher
 from django import forms
 from rest_framework import serializers
+from user.models import DeploymentInfo
 
 class SuperuserAdminSite(AdminSite):
     def has_permission(self, request):
@@ -180,11 +181,14 @@ class CustomStudentAdmin(admin.ModelAdmin):
         print("tutoring here")
         super().save_model(request, obj, form, change)
 
+class DeploymentInfoAdmin(admin.ModelAdmin):
+    list_display = ('deployed_at',)
+
 admin_site.register(User, CustomUserAdmin)  # Admin users
 admin_site.register(Teacher, CustomTeacherAdmin)
 admin_site.register(Student, CustomStudentAdmin)
+admin_site.register(DeploymentInfo, DeploymentInfoAdmin)
 # # Register Student and Teacher models
 # admin_site.register(Student, StudentAdmin)
 # admin_site.register(Teacher, TeacherAdmin)
-
 admin.site = admin_site

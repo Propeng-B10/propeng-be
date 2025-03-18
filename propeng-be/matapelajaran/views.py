@@ -43,7 +43,7 @@ def create_mata_pelajaran(request):
 def list_matapelajaran(request):
     """List all mata pelajaran, including both archived and active"""
     try:
-        matapelajaran = MataPelajaran.objects.all()
+        matapelajaran = MataPelajaran.objects.filter(isDeleted=False)
         matapelajaran_list = []
         
         for mapel in matapelajaran:
@@ -166,8 +166,8 @@ def delete_mata_pelajaran(request, pk):
         }
         
         # Delete the MataPelajaran
-        matapelajaran.delete()
-        
+        matapelajaran.isDeleted = True
+        matapelajaran.save()
         # Return success response with deleted item info
         return Response({
             "status": 200,
@@ -181,39 +181,6 @@ def delete_mata_pelajaran(request, pk):
         return Response({
             "status": 400,
             "message": f"Failed to delete MataPelajaran: {str(e)}",
-            "error": str(e)
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def archive_mata_pelajaran(request, pk):
-    """Archive an existing MataPelajaran instead of deleting it"""
-    try:
-        matapelajaran = MataPelajaran.objects.get(pk=pk)
-    except MataPelajaran.DoesNotExist:
-        return Response({
-            "status": 404,
-            "message": "MataPelajaran not found"
-        }, status=status.HTTP_404_NOT_FOUND)
-    
-    try:
-        # Archive the MataPelajaran
-        matapelajaran.is_archived = True
-        matapelajaran.save()
-        
-        # Return success response
-        return Response({
-            "status": 200,
-            "message": "MataPelajaran archived successfully",
-            "data": MataPelajaranSerializer(matapelajaran).data
-        }, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return Response({
-            "status": 400,
-            "message": f"Failed to archive MataPelajaran: {str(e)}",
             "error": str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -243,8 +210,7 @@ def get_mata_pelajaran_by_id(request, pk):
                 "id": matapelajaran.teacher.user_id if matapelajaran.teacher else None,
                 "name": teacher_name
             },
-            "jumlah_siswa": student_count,
-            "status": "Archived" if matapelajaran.is_archived else "Active"
+            "jumlah_siswa": student_count
         }
         
         return Response({
