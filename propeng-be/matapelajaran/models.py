@@ -3,6 +3,7 @@ from django.db import models
 from user.models import Teacher, Student
 from tahunajaran.models import TahunAjaran, Angkatan
 import uuid
+from datetime import date
 
 class MataPelajaran(models.Model):
     MATPEL_CATEGORY = [
@@ -36,6 +37,12 @@ class MataPelajaran(models.Model):
     def save(self, *args, **kwargs):
         if not self.kode:  # Auto-generate kode if not provided
             self.kode = f"{self.kategoriMatpel.replace('_', '').upper()}_{self.tahunAjaran}"
+        if self.tahunAjaran and not self.expiredAt:
+            self.expiredAt = date(self.tahunAjaran.tahunAjaran + 1, 7, 1)
+
+        # Jika tanggal sekarang sudah melewati expiredAt, set isActive = False
+        if self.expiredAt and date.today() >= self.expiredAt:
+            self.isActive = False
         super().save(*args, **kwargs)
 
     def __str__(self):
