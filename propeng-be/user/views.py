@@ -744,9 +744,10 @@ def list_users(request):
             'username': user.username,
             'role': user.role,
             'is_active': user.is_active,
-            'createdAt':student.createdAt,
-            'updatedAt':student.updatedAt
+            'createdAt':user.createdAt,
+            'updatedAt':user.updatedAt
         }
+    
         
         # Add role-specific data
         if user.role == 'student':
