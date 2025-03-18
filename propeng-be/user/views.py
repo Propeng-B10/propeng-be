@@ -107,7 +107,9 @@ def profile(request, id):
             "user_id": user.id,
             "username": user.username,
             "email": user.email,
-            "role": user.role
+            "role": user.role,
+            'createdAt':user.createdAt,
+            'updatedAt':user.updatedAt
         }
         
         # Add role-specific data
