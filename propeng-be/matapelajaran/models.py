@@ -17,6 +17,7 @@ class MataPelajaran(models.Model):
     angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True)
     createdAt = models.DateTimeField(default=timezone.now)
     updatedAt = models.DateTimeField(auto_now=True)
+    isDeleted = models.BooleanField(default=False)
     
     teacher = models.ForeignKey(
         Teacher, 

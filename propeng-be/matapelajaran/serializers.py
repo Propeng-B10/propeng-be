@@ -14,7 +14,7 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = MataPelajaran
-        fields = ['id', 'kategoriMatpel', 'nama', 'kode', 'angkatan','tahunAjaran', 'teacher', 'siswa_terdaftar', 'is_archived']
+        fields = ['id', 'kategoriMatpel', 'nama', 'kode', 'angkatan','tahunAjaran', 'teacher', 'siswa_terdaftar']
         read_only_fields = ['kode']
 
     def validate_teacher(self, value):
