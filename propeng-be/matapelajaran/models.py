@@ -1,3 +1,4 @@
+from django.utils import timezone
 from django.db import models
 from user.models import Teacher, Student
 from tahunajaran.models import TahunAjaran, Angkatan
@@ -14,6 +15,9 @@ class MataPelajaran(models.Model):
     kode = models.CharField(max_length=20, unique=False, blank=True)
     tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)
     angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True)
+    createdAt = models.DateTimeField(default=timezone.now)
+    updatedAt = models.DateTimeField(auto_now=True)
+    expiredAt = models.DateField(null=True, blank=True) 
     
     teacher = models.ForeignKey(
         Teacher, 

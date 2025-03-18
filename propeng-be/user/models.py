@@ -11,6 +11,8 @@ class User(AbstractUser):
     )
     email = models.EmailField(unique=False, blank=True, null=True)  # Allow blank emails
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    createdAt = models.DateTimeField(default=timezone.now)
+    updatedAt = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
         # First save the user
