@@ -2,7 +2,8 @@ from queue import Full
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from django.contrib.auth.hashers import make_password
-from .models import User, Student, Teacher, TahunAjaran
+from .models import User, Student, Teacher
+from tahunajaran.models import *
 from django.contrib.auth import get_user_model
 import re
 from django.contrib.auth.hashers import make_password
@@ -37,12 +38,26 @@ class ChangePasswordSerializer(serializers.ModelSerializer):
         return instance
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        request_username = attrs.get('username', '')
+        User = get_user_model()
+        try:
+            user = User.objects.get(username__iexact=request_username)
+            attrs['username'] = user.username
+            if not user.role and user.is_superuser:
+                user.role = 'admin'
+                user.save()
+                
+        except User.DoesNotExist:
+            pass
+            
+        return super().validate(attrs)
+
     @classmethod
     def get_token(cls, user):
-        print("coba disini di token obtain")
         token = super().get_token(user)
-        token['email'] = user.email  # Adds email to JWT payload
-        # need further discussion on how token reference
+        token['email'] = user.email
+        token['role'] = user.role if user.role else ('admin' if user.is_superuser else None)
         return token
     
 class UserSerializer(serializers.ModelSerializer):
@@ -62,10 +77,18 @@ class UserSerializer(serializers.ModelSerializer):
         name = validated_data.pop('name')
         nomorInduk = validated_data.pop('nomorInduk', None)
         angkatan = validated_data.pop('angkatan', None)
+        usernameee = validated_data.pop('username', None)
+        usernameee = usernameee.lower()
+        print("DISNIIIII")
+        print(usernameee)
+        try:
+            AngkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
+        except:
+            raise serializers.ValidationError({"status":"400","Message":"Angkatan gagal dibuat!"})
         try:
             nomorInduk = int(nomorInduk)
         except:
-            raise serializers.ValidationError({"status":"400","Message":"User with that Nomor Induk can't be numbers"})
+            raise serializers.ValidationError({"status":"400","Message":"Nomor induk harus berupa angka!"})
 
         # remove Existing Email validation 
         # if User.objects.filter(email=validated_data['email']).exists():
@@ -76,39 +99,29 @@ class UserSerializer(serializers.ModelSerializer):
         print(validated_data)
         try:
             user = User.objects.create_user(
-                username=validated_data['username'],
+                username=usernameee,
                 # default, need further discussion
-                email=validated_data['username'],
+                email="defaultin@gmail.com",
                 role=role,
                 password=validated_data['password']  # Hash password
             )
         except:
-            raise serializers.ValidationError({"status":"400","Message":"User with that username credentials is already here"})
-        print("disini serializer" + user.username + user.role)
-        print(validated_data)
+            raise serializers.ValidationError({"status":"400","Message":"User dengan username tersebut telah ada pada sistem"})
 
-        # Assign role-specific attributes
         if role == "student":
             if angkatan is None or angkatan<=0 or angkatan is str:
-                print("Yes")
                 user.delete()
-                raise serializers.ValidationError({"status":"400","Message":"tahunAjaran is incorrect, either negative or in string"})
+                raise serializers.ValidationError({"status":"400","Message":"tahunAjaran terdapat kesalahan, harus berupa Angka positive"})
             if Student.objects.filter(nisn=nomorInduk).exists():
                 user.delete()
-                raise serializers.ValidationError({"status":"400","Message":"Student with that NISN numbers already exist"})
-            # Buat atau ambil instance TahunAjaran
-            # need further discussion on tahunAjaran field cc: arshad 
-            # print("yes too")
-            # tahun_ajaran_instance, created = TahunAjaran.objects.get_or_create(angkatan=angkatan)
-
-            # Buat Student dengan instance TahunAjaran
-            Student.objects.create(user=user, nisn=nomorInduk, name=name, angkatan=angkatan)
+                raise serializers.ValidationError({"status":"400","Message":"Siswa dengan NISN tersebut sudah ada pada sistem"})
+            Student.objects.create(user=user, nisn=nomorInduk, name=name, angkatan=AngkatanObj)
 
         elif role == "teacher":
             if Teacher.objects.filter(nisp=nomorInduk).exists():
                 user.delete()
-                raise serializers.ValidationError({"status":"400","Message":"Teacher with that NISP numbers already exist"})
-            Teacher.objects.create(user=user, nisp=nomorInduk, username=user.username, name=name, angkatan=angkatan)
+                raise serializers.ValidationError({"status":"400","Message":"Guru dengan NISP tersebut sudah ada pada sistem"})
+            Teacher.objects.create(user=user, nisp=nomorInduk, username=user.username, name=name, angkatan=AngkatanObj)
             
         return user
 

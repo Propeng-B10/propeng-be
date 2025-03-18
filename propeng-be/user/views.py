@@ -10,9 +10,10 @@ from rest_framework.permissions import IsAuthenticated, BasePermission
 from django.contrib.auth.models import User
 from .serializers import MyTokenObtainPairSerializer, UserSerializer, ChangePasswordSerializer
 from rest_framework.views import APIView
-from rest_framework import status, generics
+from rest_framework import status, generics, serializers
 from .models import Student, Teacher, User
 from kelas.models import Kelas
+from tahunajaran.models import Angkatan
 import re
 from django.contrib.auth.hashers import make_password
 from django.http import JsonResponse
@@ -72,9 +73,9 @@ def list_teacher(request):
                 "name": teacher.name,
                 "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
+                "angkatan": teacher.angkatan.angkatan if teacher.angkatan else None, 
                 "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
-                "angkatan": teacher.angkatan,
-                "status": "Deleted" if teacher.isDeleted else "Active"
+                "isActive": teacher.user.is_active
             }
             teacher_list.append(teacher_data)
             
@@ -106,7 +107,9 @@ def profile(request, id):
             "user_id": user.id,
             "username": user.username,
             "email": user.email,
-            "role": user.role
+            "role": user.role,
+            'createdAt':user.createdAt,
+            'updatedAt':user.updatedAt
         }
         
         # Add role-specific data
@@ -116,7 +119,7 @@ def profile(request, id):
                 profile_data.update({
                     "name": student.name,
                     "nisn": student.nisn,
-                    "angkatan": student.angkatan,
+                    "angkatan": student.angkatan.angkatan if student.angkatan else None,
                     "status": "Deleted" if student.isDeleted else "Active"
                 })
             else:
@@ -131,9 +134,9 @@ def profile(request, id):
                 profile_data.update({
                     "name": teacher.name,
                     "nisp": teacher.nisp,
+                    "angkatan":teacher.angkatan.angkatan if teacher.angkatan else None,
                     "homeroomId": teacher.homeroomId,
-                    "angkatan": teacher.angkatan,
-                    "status": "Deleted" if teacher.isDeleted else "Active"
+                    "isActive": user.is_active
                 })
             else:
                 return Response({
@@ -174,9 +177,9 @@ def list_active_teacher(request):
                 "name": teacher.name,
                 "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
+                "angkatan":teacher.angkatan.angkatan if teacher.angkatan else None,
                 "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
-                "angkatan": teacher.angkatan,
-                "status": "Active"
+                "isActive": teacher.user.is_active
             }
             teacher_list.append(teacher_data)
             
@@ -207,9 +210,9 @@ def list_homeroom_teachers(request):
                 "name": teacher.name,
                 "username": teacher.user.username,
                 "nisp": teacher.nisp,
+                "angkatan":teacher.angkatan.angkatan if teacher.angkatan else None,
                 "homeroomId": teacher.homeroomId,
-                "angkatan": teacher.angkatan,
-                "status": "Deleted" if teacher.isDeleted else "Active"
+                "isActive": teacher.user.is_active
             }
             teacher_list.append(teacher_data)
             
@@ -241,7 +244,7 @@ def list_student(request):
                 "isAssignedtoClass": student.isAssignedtoClass,
                 "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
-                "angkatan": student.angkatan,
+                "angkatan": student.angkatan.angkatan if student.angkatan else None,
                 "status": "Deleted" if student.isDeleted else "Active"
             }
             student_list.append(student_data)
@@ -264,7 +267,9 @@ def list_student(request):
 def list_active_student(request):
     """List only active students (not deleted)"""
     try:
+        print("yes")
         students = Student.objects.filter(isDeleted=False)
+        print(students)
         student_list = []
         
         for student in students:
@@ -274,7 +279,7 @@ def list_active_student(request):
                 "isAssignedtoClass": student.isAssignedtoClass,
                 "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
-                "angkatan": student.angkatan,
+                "angkatan": student.angkatan.angkatan if student.angkatan else None,
                 "status": "Active"
             }
             student_list.append(student_data)
@@ -342,6 +347,7 @@ class MyTokenObtainPairView(TokenObtainPairView):
 
 # Login (JWT)
 class LoginView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
     pass
 
 # Refresh Token
@@ -358,7 +364,7 @@ def protected_view(request):
 
         # Initialize response data
         user_data = {
-            "user_id": user.id,  # Store the original user ID
+            "id": user.id,  # Store the original user ID
             "username": user.username,
             "role": user.role
         }
@@ -370,7 +376,7 @@ def protected_view(request):
                 user_data["name"] = student.name
                 user_data["id"] = student.user_id  # Use student ID
                 user_data["nisn"] = student.nisn
-                user_data["angkatan"] = student.angkatan
+                user_data["angkatan"] = student.angkatan.angkatan if student.angkatan else None
             else:
                 return Response({"error": "Student record not found"}, status=404)
 
@@ -381,7 +387,7 @@ def protected_view(request):
                 user_data["id"] = teacher.user_id  # Use teacher ID
                 user_data["nisp"] = teacher.nisp
                 user_data["homeroom_id"] = teacher.homeroomId
-                user_data["angkatan"] = teacher.angkatan
+                user_data["angkatan"] = teacher.angkatan.angkatan if teacher.angkatan else None
             else:
                 return Response({"error": "Teacher record not found"}, status=404)
 
@@ -399,20 +405,19 @@ class logout_view(APIView):
 
     def options(self, request, *args, **kwargs):
         """Allow the OPTIONS request for CORS preflight."""
-        return Response(status=200)  # Respond OK to OPTIONS request
+        return Response(status=200) 
 
     def post(self, request):
         """Handle logout."""
         return Response({"message": "Logged out successfully"}, status=200)
 
 @api_view(['PUT'])
-@permission_classes([IsAuthenticated])  # Admin harus login
+@permission_classes([IsAuthenticated])
 def reset_password(request):
-    if request.user.role != "admin":  # Pastikan hanya admin yang bisa mereset password
+    if request.user.role != "admin":
         return Response({"error": "Hanya admin yang bisa mereset password."}, status=status.HTTP_403_FORBIDDEN)
 
-    user_id = request.data.get("user_id")  # ID student/teacher yang mau direset
-    # new_password = request.data.get("new_password")
+    user_id = request.data.get("user_id")
     new_password = "SMAKAnglo123"
 
     try:
@@ -452,10 +457,10 @@ def delete_user(request, id):
                 student.save()
                 return Response({
                     "status": 200,
-                    "message": f"Student {student.name} (NISN: {student.nisn}) has been successfully deleted",
+                    "message": f"Student {student.name} (NISN: {student.nisn}) berhasil dihapus",
                     "detail": {
                         "student_id": student.user_id,
-                        "username": user.username,
+                        "username": user.username.lower(),
                         "name": student.name,
                         "nisn": student.nisn
                     }
@@ -463,7 +468,7 @@ def delete_user(request, id):
             else:
                 return Response({
                     "status": 404,
-                    "message": f"Student record not found for user {user.username} (User ID: {user.id})"
+                    "message": f"Tidak ditemukan user dengan username {user.username} (User ID: {user.id})"
                 }, status=status.HTTP_404_NOT_FOUND)
 
         elif user.role == "teacher":
@@ -484,9 +489,10 @@ def delete_user(request, id):
                     "detail": {
                         "user_id": user.id,
                         "teacher_id": teacher.user_id,
-                        "username": user.username,
+                        "username": user.username.lower(),
                         "name": teacher.name,
-                        "nisp": teacher.nisp
+                        "nisp": teacher.nisp,
+                        "angkatan" : teacher.angkatan.angkatan if teacher.angkatan else None
                     }
                 }, status=status.HTTP_200_OK)
             else:
@@ -520,15 +526,23 @@ def edit_user(request, id):
             "user_id": user.id,
             "username": user.username,
             "email": user.email,
-            "role": user.role
+            "role": user.role,
+            "isActive" : user.is_active
         }
         
         data = request.data
         updated_fields = []
 
         if "username" in data and data["username"] != user.username:
+            usernamee = data["username"].lower()
+            print(usernamee)
+            if User.objects.filter(username=usernamee).exclude(id=user.id).exists():
+                return Response({
+                "status": 400,
+                "message": f"Tidak dapat mengubah username user tersebut. Terdapat username {usernamee} dengan username yang sama."
+            }, status=status.HTTP_400_BAD_REQUEST)
             updated_fields.append("username")
-            user.username = data["username"]
+            user.username = data["username"].lower()
         if "email" in data and data["email"] != user.email:
             updated_fields.append("email")
             user.email = data["email"]
@@ -537,6 +551,24 @@ def edit_user(request, id):
                 "status": 400,
                 "message": "Tidak dapat mengubah role user. Silakan hapus user dan buat baru dengan role yang sesuai."
             }, status=status.HTTP_400_BAD_REQUEST)
+        print(data)
+        active_state = data["isActive"]
+        active_state = active_state
+        if "isActive" in data:
+            print(active_state)
+            if active_state == "true" or active_state=="True" or active_state == True:
+                updated_fields.append("isActive")
+                user.is_active = True
+                print("true kejalan")
+            elif active_state == "false" or active_state=="False" or active_state == False:
+                updated_fields.append("isActive")
+                user.is_active = False
+                print("false kejalan")
+            else:
+                return Response({
+                        "status": 400,
+                        "message": f"isActive: {data['isActive']} Harus berupa true atau false"
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
         if user.role == "student":
             student = Student.objects.filter(user=user).first()
@@ -546,14 +578,16 @@ def edit_user(request, id):
                     "name": student.name,
                     "nisn": student.nisn,
                     "status": "Deleted" if student.isDeleted else "Active",
-                    "angkatan": student.angkatan
+                    "angkatan": student.angkatan.angkatan if student.angkatan else None
                 })
-                
                 if "name" in data and data["name"] != student.name:
                     updated_fields.append("name")
                     student.name = data["name"]
                 if "nisn" in data and data["nisn"] != student.nisn:
-                    # Check if NISN already exists for another student
+                    try:
+                        nomorInduk = int(data["nisn"])
+                    except:
+                        raise serializers.ValidationError({"status":"400","Message":"Nomor induk harus berupa angka!"})
                     if Student.objects.filter(nisn=data["nisn"]).exclude(user_id=user.id).exists():
                         return Response({
                             "status": 400,
@@ -561,9 +595,14 @@ def edit_user(request, id):
                         }, status=status.HTTP_400_BAD_REQUEST)
                     updated_fields.append("nisn")
                     student.nisn = data["nisn"]
-                if "nisn" in data and data["nisn"] != student.nisn:
+                if "angkatan" in data and data["angkatan"] != student.angkatan.angkatan:
+                    angkatan = data["angkatan"]
+                    try:
+                        AngkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
+                    except:
+                        raise serializers.ValidationError({"status":"400","Message":"Angkatan gagal dibuat!"})
                     updated_fields.append("angkatan")
-                    student.angkatan = data["angkatan"]
+                    student.angkatan = AngkatanObj
                 
                 student.save()
             else:
@@ -579,13 +618,17 @@ def edit_user(request, id):
                     "teacher_id": teacher.user_id,
                     "name": teacher.name,
                     "nisp": teacher.nisp,
-                    "status": "Deleted" if teacher.isDeleted else "Active"
+                    "angkatan":teacher.angkatan.angkatan
                 })
                 
                 if "name" in data and data["name"] != teacher.name:
                     updated_fields.append("name")
                     teacher.name = data["name"]
                 if "nisp" in data and data["nisp"] != teacher.nisp:
+                    try:
+                        nomorInduk = int(data["nisn"])
+                    except:
+                        raise serializers.ValidationError({"status":"400","Message":"Nomor induk harus berupa angka!"})
                     # Check if NISP already exists for another teacher
                     if Teacher.objects.filter(nisp=data["nisp"]).exclude(user_id=user.id).exists():
                         return Response({
@@ -594,19 +637,29 @@ def edit_user(request, id):
                         }, status=status.HTTP_400_BAD_REQUEST)
                     updated_fields.append("nisp")
                     teacher.nisp = data["nisp"]
+                if "angkatan" in data and data["angkatan"] != teacher.angkatan.angkatan:
+                    angkatan = data["angkatan"]
+                    try:
+                        AngkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
+                    except:
+                        raise serializers.ValidationError({"status":"400","Message":"Angkatan gagal dibuat!"})
+                    updated_fields.append("angkatan")
+                    teacher.angkatan = AngkatanObj
                 
                 teacher.save()
+                user.save()
             else:
                 return Response({
                     "status": 404,
-                    "message": f"Teacher record not found for user {user.username} (User ID: {user.id})"
+                    "message": f"Data guru tidak ditemukan untuk username {user.username} (User ID: {user.id})"
                 }, status=status.HTTP_404_NOT_FOUND)
         
         user.save()
-        
-        response_data = {
+        if len(updated_fields) == 0:
+            print("yessss")
+            response_data = {
             "original_data": original_data,
-            "updated_fields": updated_fields,
+            "updated_fields": "tidak ada (kosong)",
             "current_data": {
                 "user_id": user.id,
                 "username": user.username,
@@ -614,28 +667,46 @@ def edit_user(request, id):
                 "role": user.role
             }
         }
+        else:
+            response_data = {
+                "original_data": original_data,
+                "updated_fields": updated_fields,
+                "current_data": {
+                    "user_id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "role": user.role
+                }
+            }
         
         if user.role == "student" and student:
             response_data["current_data"].update({
                 "student_id": student.user_id,
                 "name": student.name,
                 "nisn": student.nisn,
-                "status": "Deleted" if student.isDeleted else "Active",
-                "angkatan": student.angkatan
+                "angkatan": student.angkatan.angkatan,
+                "isActive": user.is_active
             })
         elif user.role == "teacher" and teacher:
             response_data["current_data"].update({
                 "teacher_id": teacher.user_id,
                 "name": teacher.name,
                 "nisp": teacher.nisp,
-                "status": "Deleted" if teacher.isDeleted else "Active"
+                "angkatan":teacher.angkatan.angkatan,
+                "isActive": user.is_active
             })
-
-        return Response({
-            "status": 200,
-            "message": f"User berhasil diperbarui (field yang diubah: {', '.join(updated_fields)})",
-            "detail": response_data
-        }, status=status.HTTP_200_OK)
+        if len(updated_fields) == 0:
+               return Response({
+                "status": 200,
+                "message": f"User berhasil diperbarui (field yang diubah: Tidak ada)",
+                "detail": response_data
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                "status": 200,
+                "message": f"User berhasil diperbarui (field yang diubah: {', '.join(updated_fields)})",
+                "detail": response_data
+            }, status=status.HTTP_200_OK)
 
     except User.DoesNotExist:
         return Response({
@@ -661,25 +732,40 @@ def list_users(request):
     user_list = []
     
     for user in users:
+        if user.role == 'student':
+            try:
+                student = Student.objects.get(user=user)
+                if student.isDeleted:
+                    continue
+            except Student.DoesNotExist:
+                pass
+        elif user.role == 'teacher':
+            try:
+                teacher = Teacher.objects.get(user=user)
+                if teacher.isDeleted:
+                    continue
+            except Teacher.DoesNotExist:
+                pass
+        else:
+            continue
+
         user_data = {
             'id': user.id,
             'username': user.username,
-            'email': user.email,
             'role': user.role,
-            'is_active': user.is_active,
-            'date_joined': user.date_joined
+            'isActive': user.is_active,
+            'createdAt':user.createdAt,
+            'updatedAt':user.updatedAt
         }
-        
+    
+        # test
         # Add role-specific data
         if user.role == 'student':
             try:
                 student = Student.objects.get(user=user)
                 user_data.update({
                     'name': student.name,
-                    'nisn': student.nisn,
-                    'angkatan': student.angkatan,
-                    'isActive': student.isActive,
-                    'isDeleted': student.isDeleted
+                    'angkatan':student.angkatan.angkatan
                 })
             except Student.DoesNotExist:
                 pass
@@ -688,11 +774,7 @@ def list_users(request):
                 teacher = Teacher.objects.get(user=user)
                 user_data.update({
                     'name': teacher.name,
-                    'nisp': teacher.nisp,
-                    'angkatan': teacher.angkatan,
-                    'isActive': teacher.isActive,
-                    'isDeleted': teacher.isDeleted,
-                    'homeroomId': teacher.homeroomId
+                    'angkatan':teacher.angkatan.angkatan
                 })
             except Teacher.DoesNotExist:
                 pass
@@ -701,6 +783,6 @@ def list_users(request):
     
     return Response({
         'status': '200',
-        'message': 'Successfully retrieved all users',
+        'message': 'Berhasil mendapatkan semua list user',
         'data': user_list
     }, status=status.HTTP_200_OK)

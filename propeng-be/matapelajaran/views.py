@@ -43,7 +43,7 @@ def create_mata_pelajaran(request):
 def list_matapelajaran(request):
     """List all mata pelajaran, including both archived and active"""
     try:
-        matapelajaran = MataPelajaran.objects.all()
+        matapelajaran = MataPelajaran.objects.filter(isDeleted=False)
         matapelajaran_list = []
         
         for mapel in matapelajaran:
@@ -64,7 +64,8 @@ def list_matapelajaran(request):
                     "name": teacher_name
                 },
                 "jumlah_siswa": student_count,
-                "status": "Archived" if mapel.is_archived else "Active"
+                "status": "Archived" if mapel.is_archived else "Active",
+                "angkatan":mapel.angkatan.angkatan if mapel.angkatan else None
             }
             matapelajaran_list.append(mapel_data)
             
@@ -159,13 +160,14 @@ def delete_mata_pelajaran(request, pk):
         matapelajaran_info = {
             "id": matapelajaran.id,
             "nama": matapelajaran.nama,
+            "angkatan":matapelajaran.angkatan,
             "kategoriMatpel": matapelajaran.get_kategoriMatpel_display(),
             "tahunAjaran": matapelajaran.tahunAjaran.tahunAjaran if matapelajaran.tahunAjaran else None
         }
         
         # Delete the MataPelajaran
-        matapelajaran.delete()
-        
+        matapelajaran.isDeleted = True
+        matapelajaran.save()
         # Return success response with deleted item info
         return Response({
             "status": 200,
@@ -182,10 +184,10 @@ def delete_mata_pelajaran(request, pk):
             "error": str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['POST'])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def archive_mata_pelajaran(request, pk):
-    """Archive an existing MataPelajaran instead of deleting it"""
+def get_mata_pelajaran_by_id(request, pk):
+    """Retrieve a specific MataPelajaran by ID"""
     try:
         matapelajaran = MataPelajaran.objects.get(pk=pk)
     except MataPelajaran.DoesNotExist:
@@ -195,22 +197,30 @@ def archive_mata_pelajaran(request, pk):
         }, status=status.HTTP_404_NOT_FOUND)
     
     try:
-        # Archive the MataPelajaran
-        matapelajaran.is_archived = True
-        matapelajaran.save()
+        teacher_name = matapelajaran.teacher.name if matapelajaran.teacher else None
+        student_count = matapelajaran.siswa_terdaftar.count()
         
-        # Return success response
+        matapelajaran_data = {
+            "id": matapelajaran.id,
+            "nama": matapelajaran.nama,
+            "kategoriMatpel": matapelajaran.get_kategoriMatpel_display(),
+            "kode": matapelajaran.kode,
+            "tahunAjaran": matapelajaran.tahunAjaran.tahunAjaran if matapelajaran.tahunAjaran else None,
+            "teacher": {
+                "id": matapelajaran.teacher.user_id if matapelajaran.teacher else None,
+                "name": teacher_name
+            },
+            "jumlah_siswa": student_count
+        }
+        
         return Response({
             "status": 200,
-            "message": "MataPelajaran archived successfully",
-            "data": MataPelajaranSerializer(matapelajaran).data
+            "message": "Successfully retrieved MataPelajaran",
+            "data": matapelajaran_data
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         return Response({
-            "status": 400,
-            "message": f"Failed to archive MataPelajaran: {str(e)}",
-            "error": str(e)
-        }, status=status.HTTP_400_BAD_REQUEST)
+            "status": 500,
+            "message": f"Error retrieving MataPelajaran: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

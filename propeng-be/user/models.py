@@ -1,6 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from tahunajaran.models import TahunAjaran
+from tahunajaran.models import TahunAjaran, Angkatan
 from django.utils import timezone
 
 class User(AbstractUser):
@@ -11,6 +11,8 @@ class User(AbstractUser):
     )
     email = models.EmailField(unique=False, blank=True, null=True)  # Allow blank emails
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    createdAt = models.DateTimeField(default=timezone.now)
+    updatedAt = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
         # First save the user
@@ -42,12 +44,10 @@ class Student(models.Model):
     name = models.CharField(null=True, blank=True, max_length=32)
     username = models.CharField(null=True, blank=True, max_length=32)
     nisn = models.CharField(null=True, blank=True, max_length=20)
-    angkatan = models.IntegerField(null=False, blank=False, default=2023)
+    angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True)
     isAssignedtoClass = models.BooleanField(default=False)
     isActive = models.BooleanField(default=True)
     isDeleted = models.BooleanField(default=False)
-    createdAt = models.DateTimeField(default=timezone.now)
-    updatedAt = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
         # Sync username with User model before saving
@@ -70,11 +70,9 @@ class Teacher(models.Model):
         blank=True,
         related_name='waliKelasDari'
     )
-    angkatan = models.IntegerField(null=False, blank=False, default=2023)
     isActive = models.BooleanField(default=True)
     isDeleted = models.BooleanField(default=False)
-    createdAt = models.DateTimeField(default=timezone.now)
-    updatedAt = models.DateTimeField(auto_now=True)
+    angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True)
     
 
     def save(self, *args, **kwargs):
@@ -88,3 +86,10 @@ class Teacher(models.Model):
             return f"{self.user.username}"
         else:
             return f"{self.user.username}"
+
+#cant be put in simak folder ternyata :(
+class DeploymentInfo(models.Model):
+    deployed_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Last Deployment: {self.deployed_at}"

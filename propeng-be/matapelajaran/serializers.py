@@ -2,19 +2,19 @@ from django.db import IntegrityError, transaction
 from rest_framework import serializers
 from .models import MataPelajaran
 from user.models import Teacher, Student, User
-from tahunajaran.models import TahunAjaran
+from tahunajaran.models import TahunAjaran, Angkatan
 
 class MataPelajaranSerializer(serializers.ModelSerializer):
     print("🔹 MataPelajaranSerializer")
-    id = serializers.UUIDField(read_only=True)
-    kategoriMatpel = serializers.ChoiceField(choices=MataPelajaran.MATKUL_CHOICES)
+    kategoriMatpel = serializers.ChoiceField(choices=MataPelajaran.MATPEL_CATEGORY)
     teacher = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
     siswa_terdaftar = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)
     tahunAjaran = serializers.IntegerField(write_only=True)
+    angkatan = serializers.IntegerField(write_only=True, required=True)
     
     class Meta:
         model = MataPelajaran
-        fields = ['id', 'kategoriMatpel', 'nama', 'kode', 'tahunAjaran', 'teacher', 'siswa_terdaftar', 'is_archived']
+        fields = ['id', 'kategoriMatpel', 'nama', 'kode', 'angkatan','tahunAjaran', 'teacher', 'siswa_terdaftar']
         read_only_fields = ['kode']
 
     def validate_teacher(self, value):
@@ -57,11 +57,17 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         """
         # Get or create TahunAjaran
         tahun = data.get('tahunAjaran')
+        angkatann = data.get("angkatan")
         try:
             tahun_ajaran, created = TahunAjaran.objects.get_or_create(tahunAjaran=tahun)
             data['tahunAjaran_instance'] = tahun_ajaran
         except Exception as e:
             raise serializers.ValidationError(f"Error with TahunAjaran: {str(e)}")
+        try :
+            angkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatann)
+            data["angkatan_instance"] = angkatanObj
+        except Exception as e:
+            raise serializers.ValidationError(f"Error with Angkatan: {str(e)}")
         
 
         # need to discuss if a matpel with the same name can exist,
@@ -96,12 +102,14 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         tahun_ajaran = validated_data.pop('tahunAjaran_instance')
         teacher_user = validated_data.pop('teacher')
         students_users = validated_data.pop('siswa_terdaftar', [])
+        angkatan = validated_data.pop('angkatan_instance')
         
         # Create MataPelajaran without relationships first
         matapelajaran = MataPelajaran.objects.create(
             kategoriMatpel=validated_data['kategoriMatpel'],
             nama=validated_data['nama'],
-            tahunAjaran=tahun_ajaran
+            tahunAjaran=tahun_ajaran,
+            angkatan = angkatan
         )
         
         # Set the teacher using Django's ORM
@@ -139,6 +147,12 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
                 'name': instance.teacher.name,
                 'username': instance.teacher.username
             }
+
+        if instance.angkatan:
+            representation['angkatan'] = {
+                'id': instance.angkatan.id,
+                'angkatan': instance.angkatan.angkatan
+            }
         
         # Add student details
         representation['siswa_terdaftar'] = []
@@ -166,6 +180,8 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         tahun_ajaran_instance = None
         if 'tahunAjaran_instance' in validated_data:
             tahun_ajaran_instance = validated_data.pop('tahunAjaran_instance')
+        if 'angkatan_instance' in validated_data:
+            angkatan_instance_lagi = validated_data.pop('angkatan_instance')
         
         teacher_user = validated_data.pop('teacher', None)
         students_users = validated_data.pop('siswa_terdaftar', None)
@@ -177,6 +193,8 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         # Update tahunAjaran if provided
         if tahun_ajaran_instance:
             instance.tahunAjaran = tahun_ajaran_instance
+        if angkatan_instance_lagi:
+            instance.angkatan = angkatan_instance_lagi
         
         # Save the instance with updated fields
         instance.save()
