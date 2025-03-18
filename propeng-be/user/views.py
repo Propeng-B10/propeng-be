@@ -75,7 +75,7 @@ def list_teacher(request):
                 "nisp": teacher.nisp,
                 "angkatan":teacher.angkatan.angkatan,
                 "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
-                "status": "Deleted" if teacher.isDeleted else "Active"
+                "isActive": teacher.user.is_active
             }
             teacher_list.append(teacher_data)
             
@@ -118,7 +118,7 @@ def profile(request, id):
                     "name": student.name,
                     "nisn": student.nisn,
                     "angkatan": student.angkatan.angkatan,
-                    "status": "Deleted" if student.isDeleted else "Active"
+                    "isActive": user.is_active
                 })
             else:
                 return Response({
@@ -134,7 +134,7 @@ def profile(request, id):
                     "nisp": teacher.nisp,
                     "angkatan":teacher.angkatan.angkatan,
                     "homeroomId": teacher.homeroomId,
-                    "status": "Deleted" if teacher.isDeleted else "Active"
+                    "isActive": user.is_active
                 })
             else:
                 return Response({
@@ -177,7 +177,7 @@ def list_active_teacher(request):
                 "nisp": teacher.nisp,
                 "angkatan":teacher.angkatan.angkatan,
                 "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
-                "status": "Active"
+                "isActive": teacher.user.is_active
             }
             teacher_list.append(teacher_data)
             
@@ -210,7 +210,7 @@ def list_homeroom_teachers(request):
                 "nisp": teacher.nisp,
                 "angkatan":teacher.angkatan.angkatan,
                 "homeroomId": teacher.homeroomId,
-                "status": "Deleted" if teacher.isDeleted else "Active"
+                "isActive": teacher.user.is_active
             }
             teacher_list.append(teacher_data)
             
@@ -243,7 +243,7 @@ def list_student(request):
                 "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
                 "angkatan": student.angkatan.angkatan,
-                "status": "Deleted" if student.isDeleted else "Active"
+                "isActive": student.user.is_active
             }
             student_list.append(student_data)
             
@@ -278,7 +278,7 @@ def list_active_student(request):
                 "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
                 "angkatan": student.angkatan.angkatan,
-                "status": "Active"
+                "isActive": student.user.is_active
             }
             student_list.append(student_data)
             
@@ -524,7 +524,8 @@ def edit_user(request, id):
             "user_id": user.id,
             "username": user.username,
             "email": user.email,
-            "role": user.role
+            "role": user.role,
+            "isActive" : user.is_active
         }
         
         data = request.data
@@ -550,14 +551,14 @@ def edit_user(request, id):
             }, status=status.HTTP_400_BAD_REQUEST)
         print(data)
         active_state = data["isActive"]
-        active_state = active_state.lower()
+        active_state = active_state
         if "isActive" in data:
             print(active_state)
-            if active_state == "true":
+            if active_state == "true" or active_state=="True" or active_state == True:
                 updated_fields.append("isActive")
                 user.is_active = True
                 print("true kejalan")
-            elif active_state == "false":
+            elif active_state == "false" or active_state=="False" or active_state == False:
                 updated_fields.append("isActive")
                 user.is_active = False
                 print("false kejalan")
@@ -574,8 +575,7 @@ def edit_user(request, id):
                     "student_id": student.user_id,
                     "name": student.name,
                     "nisn": student.nisn,
-                    "angkatan": student.angkatan,
-                    "isActive" : user.is_active
+                    "angkatan": student.angkatan
                 })
                 if "name" in data and data["name"] != student.name:
                     updated_fields.append("name")
@@ -615,8 +615,7 @@ def edit_user(request, id):
                     "teacher_id": teacher.user_id,
                     "name": teacher.name,
                     "nisp": teacher.nisp,
-                    "angkatan":teacher.angkatan.angkatan,
-                    "isActive":user.is_active
+                    "angkatan":teacher.angkatan.angkatan
                 })
                 
                 if "name" in data and data["name"] != teacher.name:
@@ -683,7 +682,7 @@ def edit_user(request, id):
                 "name": student.name,
                 "nisn": student.nisn,
                 "angkatan": student.angkatan.angkatan,
-                "isActive": "Active" if user.is_active else "Not Active"
+                "isActive": user.is_active
             })
         elif user.role == "teacher" and teacher:
             response_data["current_data"].update({
@@ -691,7 +690,7 @@ def edit_user(request, id):
                 "name": teacher.name,
                 "nisp": teacher.nisp,
                 "angkatan":teacher.angkatan.angkatan,
-                "isActive": "Active" if user.is_active else "Not Active"
+                "isActive": user.is_active
             })
         if len(updated_fields) == 0:
                return Response({
