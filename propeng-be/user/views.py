@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated, BasePermission
 from django.contrib.auth.models import User
 from .serializers import MyTokenObtainPairSerializer, UserSerializer, ChangePasswordSerializer
 from rest_framework.views import APIView
-from rest_framework import status, generics
+from rest_framework import status, generics, serializers
 from .models import Student, Teacher, User
 from kelas.models import Kelas
 from tahunajaran.models import Angkatan
@@ -73,7 +73,7 @@ def list_teacher(request):
                 "name": teacher.name,
                 "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
-                "angkatan":teacher.angkatan,
+                "angkatan":teacher.angkatan.angkatan,
                 "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
                 "status": "Deleted" if teacher.isDeleted else "Active"
             }
@@ -208,7 +208,7 @@ def list_homeroom_teachers(request):
                 "name": teacher.name,
                 "username": teacher.user.username,
                 "nisp": teacher.nisp,
-                "angkatan":teacher.angkatan,
+                "angkatan":teacher.angkatan.angkatan,
                 "homeroomId": teacher.homeroomId,
                 "status": "Deleted" if teacher.isDeleted else "Active"
             }
@@ -242,7 +242,7 @@ def list_student(request):
                 "isAssignedtoClass": student.isAssignedtoClass,
                 "username": student.user.username,  # Using synchronized username
                 "nisn": student.nisn,
-                "angkatan": student.angkatan,
+                "angkatan": student.angkatan.angkatan,
                 "status": "Deleted" if student.isDeleted else "Active"
             }
             student_list.append(student_data)
@@ -490,7 +490,7 @@ def delete_user(request, id):
                         "username": user.username.lower(),
                         "name": teacher.name,
                         "nisp": teacher.nisp,
-                        "angkatan" : teacher.angkatan
+                        "angkatan" : teacher.angkatan.angkatan
                     }
                 }, status=status.HTTP_200_OK)
             else:
@@ -532,7 +532,8 @@ def edit_user(request, id):
 
         if "username" in data and data["username"] != user.username:
             usernamee = data["username"].lower()
-            if Student.objects.filter(username=data["username"].lower()).exclude(user_id=user.id).exists():
+            print(usernamee)
+            if User.objects.filter(username=usernamee).exclude(id=user.id).exists():
                 return Response({
                 "status": 400,
                 "message": f"Tidak dapat mengubah username user tersebut. Terdapat username {usernamee} dengan username yang sama."
@@ -564,7 +565,10 @@ def edit_user(request, id):
                     updated_fields.append("name")
                     student.name = data["name"]
                 if "nisn" in data and data["nisn"] != student.nisn:
-                    # Check if NISN already exists for another student
+                    try:
+                        nomorInduk = int(data["nisn"])
+                    except:
+                        raise serializers.ValidationError({"status":"400","Message":"Nomor induk harus berupa angka!"})
                     if Student.objects.filter(nisn=data["nisn"]).exclude(user_id=user.id).exists():
                         return Response({
                             "status": 400,
@@ -572,9 +576,14 @@ def edit_user(request, id):
                         }, status=status.HTTP_400_BAD_REQUEST)
                     updated_fields.append("nisn")
                     student.nisn = data["nisn"]
-                if "angkatan" in data and data["angkatan"]:
+                if "angkatan" in data and data["angkatan"] != student.angkatan.angkatan:
+                    angkatan = data["angkatan"]
+                    try:
+                        AngkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
+                    except:
+                        raise serializers.ValidationError({"status":"400","Message":"Angkatan gagal dibuat!"})
                     updated_fields.append("angkatan")
-                    student.angkatan = data["angkatan"]
+                    student.angkatan = AngkatanObj
                 if "isActive" in data:
                     if data["isActive"].lower() != "true" or data["isActive"].lower() != "false":
                         return Response({
@@ -598,7 +607,7 @@ def edit_user(request, id):
                     "teacher_id": teacher.user_id,
                     "name": teacher.name,
                     "nisp": teacher.nisp,
-                    "angkatan":teacher.angkatan,
+                    "angkatan":teacher.angkatan.angkatan,
                     "status": "Deleted" if teacher.isDeleted else "Active",
                     "isActive":teacher.isActive
                 })
@@ -607,6 +616,10 @@ def edit_user(request, id):
                     updated_fields.append("name")
                     teacher.name = data["name"]
                 if "nisp" in data and data["nisp"] != teacher.nisp:
+                    try:
+                        nomorInduk = int(data["nisn"])
+                    except:
+                        raise serializers.ValidationError({"status":"400","Message":"Nomor induk harus berupa angka!"})
                     # Check if NISP already exists for another teacher
                     if Teacher.objects.filter(nisp=data["nisp"]).exclude(user_id=user.id).exists():
                         return Response({
@@ -615,9 +628,14 @@ def edit_user(request, id):
                         }, status=status.HTTP_400_BAD_REQUEST)
                     updated_fields.append("nisp")
                     teacher.nisp = data["nisp"]
-                if "angkatan" in data:
+                if "angkatan" in data and data["angkatan"] != teacher.angkatan.angkatan:
+                    angkatan = data["angkatan"]
+                    try:
+                        AngkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
+                    except:
+                        raise serializers.ValidationError({"status":"400","Message":"Angkatan gagal dibuat!"})
                     updated_fields.append("angkatan")
-                    teacher.angkatan = data["angkatan"]
+                    teacher.angkatan = AngkatanObj
                 
                 teacher.save()
             else:
@@ -627,10 +645,11 @@ def edit_user(request, id):
                 }, status=status.HTTP_404_NOT_FOUND)
         
         user.save()
-        
-        response_data = {
+        if len(updated_fields) == 0:
+            print("yessss")
+            response_data = {
             "original_data": original_data,
-            "updated_fields": updated_fields,
+            "updated_fields": "tidak ada (kosong)",
             "current_data": {
                 "user_id": user.id,
                 "username": user.username,
@@ -638,6 +657,17 @@ def edit_user(request, id):
                 "role": user.role
             }
         }
+        else:
+            response_data = {
+                "original_data": original_data,
+                "updated_fields": updated_fields,
+                "current_data": {
+                    "user_id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "role": user.role
+                }
+            }
         
         if user.role == "student" and student:
             response_data["current_data"].update({
@@ -645,22 +675,28 @@ def edit_user(request, id):
                 "name": student.name,
                 "nisn": student.nisn,
                 "status": "Deleted" if student.isDeleted else "Active",
-                "angkatan": student.angkatan
+                "angkatan": student.angkatan.angkatan
             })
         elif user.role == "teacher" and teacher:
             response_data["current_data"].update({
                 "teacher_id": teacher.user_id,
                 "name": teacher.name,
                 "nisp": teacher.nisp,
-                "angkatan":teacher.angkatan,
+                "angkatan":teacher.angkatan.angkatan,
                 "status": "Deleted" if teacher.isDeleted else "Active"
             })
-
-        return Response({
-            "status": 200,
-            "message": f"User berhasil diperbarui (field yang diubah: {', '.join(updated_fields)})",
-            "detail": response_data
-        }, status=status.HTTP_200_OK)
+        if len(updated_fields) == 0:
+               return Response({
+                "status": 200,
+                "message": f"User berhasil diperbarui (field yang diubah: Tidak ada)",
+                "detail": response_data
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                "status": 200,
+                "message": f"User berhasil diperbarui (field yang diubah: {', '.join(updated_fields)})",
+                "detail": response_data
+            }, status=status.HTTP_200_OK)
 
     except User.DoesNotExist:
         return Response({
@@ -718,7 +754,9 @@ def list_users(request):
                 user_data.update({
                     'name': student.name,
                     'isActive': student.isActive,
-                    'angkatan':student.angkatan.angkatan
+                    'angkatan':student.angkatan.angkatan,
+                    'createdAt':student.createdAt,
+                    'updatedAt':student.updatedAt
                 })
             except Student.DoesNotExist:
                 pass
@@ -729,6 +767,8 @@ def list_users(request):
                     'name': teacher.name,
                     'isActive': teacher.isActive,
                     'angkatan':teacher.angkatan.angkatan,
+                    'createdAt':teacher.createdAt,
+                    'updatedAt':teacher.updatedAt
                 })
             except Teacher.DoesNotExist:
                 pass

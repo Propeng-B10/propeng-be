@@ -77,7 +77,10 @@ class UserSerializer(serializers.ModelSerializer):
         name = validated_data.pop('name')
         nomorInduk = validated_data.pop('nomorInduk', None)
         angkatan = validated_data.pop('angkatan', None)
-        username = validated_data.pop('useername', None).lower()
+        usernameee = validated_data.pop('username', None)
+        usernameee = usernameee.lower()
+        print("DISNIIIII")
+        print(usernameee)
         try:
             AngkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
         except:
@@ -96,14 +99,14 @@ class UserSerializer(serializers.ModelSerializer):
         print(validated_data)
         try:
             user = User.objects.create_user(
-                username=username,
+                username=usernameee,
                 # default, need further discussion
-                email=validated_data['username'],
+                email="defaultin@gmail.com",
                 role=role,
                 password=validated_data['password']  # Hash password
             )
         except:
-            raise serializers.ValidationError({"status":"400","Message":"User dengan username tersebut telah ada disini"})
+            raise serializers.ValidationError({"status":"400","Message":"User dengan username tersebut telah ada pada sistem"})
 
         if role == "student":
             if angkatan is None or angkatan<=0 or angkatan is str:
@@ -111,13 +114,13 @@ class UserSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"status":"400","Message":"tahunAjaran terdapat kesalahan, harus berupa Angka positive"})
             if Student.objects.filter(nisn=nomorInduk).exists():
                 user.delete()
-                raise serializers.ValidationError({"status":"400","Message":"Student with that NISN numbers already exist"})
+                raise serializers.ValidationError({"status":"400","Message":"Siswa dengan NISN tersebut sudah ada pada sistem"})
             Student.objects.create(user=user, nisn=nomorInduk, name=name, angkatan=AngkatanObj)
 
         elif role == "teacher":
             if Teacher.objects.filter(nisp=nomorInduk).exists():
                 user.delete()
-                raise serializers.ValidationError({"status":"400","Message":"Teacher with that NISP numbers already exist"})
+                raise serializers.ValidationError({"status":"400","Message":"Guru dengan NISP tersebut sudah ada pada sistem"})
             Teacher.objects.create(user=user, nisp=nomorInduk, username=user.username, name=name, angkatan=AngkatanObj)
             
         return user
