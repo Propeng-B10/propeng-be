@@ -5,6 +5,11 @@ from django.contrib.admin.sites import AdminSite
 from .models import User, Student, Teacher
 from django import forms
 from rest_framework import serializers
+from .models import DeploymentInfo
+
+@admin.register(DeploymentInfo)
+class DeploymentInfoAdmin(admin.ModelAdmin):
+    list_display = ('deployed_at',)
 
 class SuperuserAdminSite(AdminSite):
     def has_permission(self, request):
