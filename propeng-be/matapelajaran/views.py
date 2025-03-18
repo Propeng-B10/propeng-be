@@ -64,7 +64,7 @@ def list_matapelajaran(request):
                     "name": teacher_name
                 },
                 "jumlah_siswa": student_count,
-                "status": "Archived" if mapel.is_archived else "Active",
+                "status": "Active" if mapel.isActive else "Inactive",
                 "angkatan":mapel.angkatan.angkatan if mapel.angkatan else None
             }
             matapelajaran_list.append(mapel_data)
@@ -112,6 +112,11 @@ def update_mata_pelajaran(request, pk):
                 "message": f"Error with TahunAjaran: {str(e)}",
                 "error": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+    if 'status' in data:
+        if data['status'].lower() == "active":
+            data['status'] = True
+        if data['status'].lower() == "inactive":
+            data["status"] = False
     
     # Create serializer with the instance and data
     serializer = MataPelajaranSerializer(matapelajaran, data=data, partial=partial)
@@ -119,8 +124,6 @@ def update_mata_pelajaran(request, pk):
     if serializer.is_valid():
         try:
             updated_matapelajaran = serializer.save()
-            
-            # Prepare response
             return Response({
                 "status": 200,
                 "message": "MataPelajaran updated successfully",

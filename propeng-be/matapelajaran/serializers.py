@@ -11,11 +11,21 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
     siswa_terdaftar = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)
     tahunAjaran = serializers.IntegerField(write_only=True)
     angkatan = serializers.IntegerField(write_only=True, required=True)
+    status = serializers.SerializerMethodField()
     
     class Meta:
         model = MataPelajaran
-        fields = ['id', 'kategoriMatpel', 'nama', 'kode', 'angkatan','tahunAjaran', 'teacher', 'siswa_terdaftar']
+        fields = ['id', 'kategoriMatpel', 'nama', 'kode', 'angkatan','tahunAjaran', 'teacher', 'siswa_terdaftar', 'status']
         read_only_fields = ['kode']
+
+    def get_status(self, obj):
+        return "Active" if obj.isActive else "Inactive"
+
+    def to_internal_value(self, data):
+        if 'status' in data:
+            data['isActive'] = data['status'] == "Active"
+            del data['status']
+        return super().to_internal_value(data)
 
     def validate_teacher(self, value):
         """
@@ -59,8 +69,8 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         tahun = data.get('tahunAjaran')
         angkatann = data.get("angkatan")
         try:
-            tahun_ajaran, created = TahunAjaran.objects.get_or_create(tahunAjaran=tahun)
-            data['tahunAjaran_instance'] = tahun_ajaran
+            tahun_ajaranobj, created = TahunAjaran.objects.get_or_create(tahunAjaran=tahun)
+            data['tahunAjaran_instance'] = tahun_ajaranobj
         except Exception as e:
             raise serializers.ValidationError(f"Error with TahunAjaran: {str(e)}")
         try :
@@ -68,30 +78,6 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
             data["angkatan_instance"] = angkatanObj
         except Exception as e:
             raise serializers.ValidationError(f"Error with Angkatan: {str(e)}")
-        
-
-        # need to discuss if a matpel with the same name can exist,
-        # it'd be weird if it cant for instance "FISIKA WAJIB KELAS 12"
-        # and at the same time i think nama should've been auto generated
-        # using the kategorimatpel + kelas + tahunajaran
-        # FISIKA KELAS 11 2022  
-
-        # -------------------------------------------------------------
-        # Check if a MataPelajaran with the same name already exists
-        # nama = data.get('nama')
-        # if nama:
-        #     existing_matapelajaran = MataPelajaran.objects.filter(nama=nama)
-            
-        #     # If we're updating an existing instance, exclude it from the check
-        #     instance = getattr(self, 'instance', None)
-        #     if instance:
-        #         existing_matapelajaran = existing_matapelajaran.exclude(id=instance.id)
-            
-        #     if existing_matapelajaran.exists():
-        #         raise serializers.ValidationError({
-        #             "nama": f"A MataPelajaran with the name '{nama}' already exists."
-        #         })
-        
         return data
 
     def create(self, validated_data):
@@ -99,7 +85,7 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         Create a new MataPelajaran with proper handling of relationships.
         """
         # Extract related objects
-        tahun_ajaran = validated_data.pop('tahunAjaran_instance')
+        tahun_ajaranobj = validated_data.pop('tahunAjaran_instance')
         teacher_user = validated_data.pop('teacher')
         students_users = validated_data.pop('siswa_terdaftar', [])
         angkatan = validated_data.pop('angkatan_instance')
@@ -108,7 +94,7 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         matapelajaran = MataPelajaran.objects.create(
             kategoriMatpel=validated_data['kategoriMatpel'],
             nama=validated_data['nama'],
-            tahunAjaran=tahun_ajaran,
+            tahunAjaran=tahun_ajaranobj,
             angkatan = angkatan
         )
         
@@ -170,6 +156,9 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
                 'tahun': instance.tahunAjaran.tahunAjaran
             }
         
+        # Add status field
+        representation['status'] = "Active" if instance.isActive else "Inactive"
+        
         return representation
 
     def update(self, instance, validated_data):
@@ -185,11 +174,25 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         
         teacher_user = validated_data.pop('teacher', None)
         students_users = validated_data.pop('siswa_terdaftar', None)
-        
+        # try:
+        #     angkatanobj, created = Angkatan.objects.get_or_create(angkatan=angkatan_instance_lagi)
+        # except Exception as e:
+        #     raise serializers.ValidationError(f"Error mendapatkan TahunAjaran: {str(e)}")
         # Update simple fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        
+        for i, z in validated_data.items():
+            print(f'ini i : {i} kalo ini z : {z}')
+            instance.i = z
+        if 'kategoriMatpel' in validated_data:
+            instance.kategoriMatpel = validated_data["kategoriMatpel"]
+        if 'nama' in validated_data:
+            instance.nama = validated_data["nama"]
+        if 'status' in validated_data:
+            if validated_data["status"] == "Active":
+                instance.isActive = True
+            if validated_data["status"] == "Inactive":
+                instance.isActive = False
+        if 'kategoriMatpel' in validated_data:
+            instance.kategoriMatpel = validated_data["kategoriMatpel"]
         # Update tahunAjaran if provided
         if tahun_ajaran_instance:
             instance.tahunAjaran = tahun_ajaran_instance

@@ -18,6 +18,7 @@ class MataPelajaran(models.Model):
     createdAt = models.DateTimeField(default=timezone.now)
     updatedAt = models.DateTimeField(auto_now=True)
     isDeleted = models.BooleanField(default=False)
+    isActive = models.BooleanField(default=True)
     
     teacher = models.ForeignKey(
         Teacher, 
