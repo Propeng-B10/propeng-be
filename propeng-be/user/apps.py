@@ -5,7 +5,6 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
     from django.contrib.auth.hashers import make_password
     from user.models import User, Teacher, Student
     from tahunajaran.models import TahunAjaran, Angkatan
-    
     # Create admin user if it doesn't exist
     if not User.objects.filter(username='adminNext').exists():
         User.objects.create(
@@ -218,21 +217,21 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
     
     matpel_data = [
         {
-            "kategoriMatpel": "FISIKA",
+            "kategoriMatpel": "Peminatan",
             "nama": "FISIKA KELAS 12",
             "tahunAjaran": tahun_2025,
             "angkatan": angkatan_2023,
             "teacher": teachers[0]
         },
         {
-            "kategoriMatpel": "BIOLOGI",
+            "kategoriMatpel": "Peminatan",
             "nama": "BIOLOGI KELAS 11",
             "tahunAjaran": tahun_2025,
             "angkatan": angkatan_2023,
             "teacher": teachers[1]
         },
         {
-            "kategoriMatpel": "KIMIA",
+            "kategoriMatpel": "Wajib",
             "nama": "KIMIA KELAS 10",
             "tahunAjaran": tahun_2025,
             "angkatan": angkatan_2023,
