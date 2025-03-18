@@ -548,6 +548,24 @@ def edit_user(request, id):
                 "status": 400,
                 "message": "Tidak dapat mengubah role user. Silakan hapus user dan buat baru dengan role yang sesuai."
             }, status=status.HTTP_400_BAD_REQUEST)
+        print(data)
+        active_state = data["isActive"]
+        active_state = active_state.lower()
+        if "isActive" in data:
+            print(active_state)
+            if active_state == "true":
+                updated_fields.append("isActive")
+                user.is_active = True
+                print("true kejalan")
+            elif active_state == "false":
+                updated_fields.append("isActive")
+                user.is_active = False
+                print("false kejalan")
+            else:
+                return Response({
+                        "status": 400,
+                        "message": f"isActive: {data['isActive']} Harus berupa true atau false"
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
         if user.role == "student":
             student = Student.objects.filter(user=user).first()
@@ -556,11 +574,9 @@ def edit_user(request, id):
                     "student_id": student.user_id,
                     "name": student.name,
                     "nisn": student.nisn,
-                    "status": "Deleted" if student.isDeleted else "Active",
                     "angkatan": student.angkatan,
-                    "isActive" : student.isActive
+                    "isActive" : user.is_active
                 })
-                
                 if "name" in data and data["name"] != student.name:
                     updated_fields.append("name")
                     student.name = data["name"]
@@ -584,14 +600,6 @@ def edit_user(request, id):
                         raise serializers.ValidationError({"status":"400","Message":"Angkatan gagal dibuat!"})
                     updated_fields.append("angkatan")
                     student.angkatan = AngkatanObj
-                if "isActive" in data:
-                    if data["isActive"].lower() != "true" or data["isActive"].lower() != "false":
-                        return Response({
-                            "status": 400,
-                            "message": f"isActive: {data['isActive']} Harus berupa True atau False"
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                    updated_fields.append("isActive")
-                    student.isActive = data["isActive"]
                 
                 student.save()
             else:
@@ -608,8 +616,7 @@ def edit_user(request, id):
                     "name": teacher.name,
                     "nisp": teacher.nisp,
                     "angkatan":teacher.angkatan.angkatan,
-                    "status": "Deleted" if teacher.isDeleted else "Active",
-                    "isActive":teacher.isActive
+                    "isActive":user.is_active
                 })
                 
                 if "name" in data and data["name"] != teacher.name:
@@ -638,6 +645,7 @@ def edit_user(request, id):
                     teacher.angkatan = AngkatanObj
                 
                 teacher.save()
+                user.save()
             else:
                 return Response({
                     "status": 404,
@@ -674,8 +682,8 @@ def edit_user(request, id):
                 "student_id": student.user_id,
                 "name": student.name,
                 "nisn": student.nisn,
-                "status": "Deleted" if student.isDeleted else "Active",
-                "angkatan": student.angkatan.angkatan
+                "angkatan": student.angkatan.angkatan,
+                "isActive": "Active" if user.is_active else "Not Active"
             })
         elif user.role == "teacher" and teacher:
             response_data["current_data"].update({
@@ -683,7 +691,7 @@ def edit_user(request, id):
                 "name": teacher.name,
                 "nisp": teacher.nisp,
                 "angkatan":teacher.angkatan.angkatan,
-                "status": "Deleted" if teacher.isDeleted else "Active"
+                "isActive": "Active" if user.is_active else "Not Active"
             })
         if len(updated_fields) == 0:
                return Response({
@@ -743,7 +751,7 @@ def list_users(request):
             'id': user.id,
             'username': user.username,
             'role': user.role,
-            'is_active': user.is_active,
+            'isActive': user.is_active,
             'createdAt':user.createdAt,
             'updatedAt':user.updatedAt
         }
