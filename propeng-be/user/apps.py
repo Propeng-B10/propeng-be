@@ -274,9 +274,18 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
     print(f'Created kelas: {kelas_data["namaKelas"]}')
     print('Database population completed!')
 
+
+def create_deployment_info(sender, **kwargs):
+    from user.models import DeploymentInfo
+    DeploymentInfo.objects.create()
+    print("✅ DeploymentInfo instance created!")
+
 class UserConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'user'
 
     def ready(self):
         post_migrate.connect(ensure_admin_exists_and_populate_data, sender=self)
+        post_migrate.connect(create_deployment_info, sender=self)
+
+

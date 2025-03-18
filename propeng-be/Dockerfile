@@ -22,4 +22,4 @@ ENV DJANGO_SUPERUSER_PASSWORD=adminpassword
 
 # Run migrations, collect static files, and start Django server
 # Check if superuser exists before creating
-CMD ["sh", "-c", "python manage.py collectstatic --noinput && python manage.py migrate && python manage.py shell -c \"from simak.models import DeploymentInfo; DeploymentInfo.objects.all().delete(); DeploymentInfo.objects.create();\" && python manage.py shell -c \"from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.filter(username='admin').exists() or User.objects.create_superuser('admin', 'admin@example.com', 'adminpassword')\" && python manage.py runserver 0.0.0.0:8000"]
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && python manage.py migrate && python manage.py shell -c \"from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.filter(username='admin').exists() or User.objects.create_superuser('admin', 'admin@example.com', 'adminpassword')\" && python manage.py runserver 0.0.0.0:8000"]

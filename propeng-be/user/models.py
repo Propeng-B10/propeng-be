@@ -48,8 +48,6 @@ class Student(models.Model):
     isAssignedtoClass = models.BooleanField(default=False)
     isActive = models.BooleanField(default=True)
     isDeleted = models.BooleanField(default=False)
-    createdAt = models.DateTimeField(default=timezone.now)
-    updatedAt = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
         # Sync username with User model before saving
@@ -74,8 +72,6 @@ class Teacher(models.Model):
     )
     isActive = models.BooleanField(default=True)
     isDeleted = models.BooleanField(default=False)
-    createdAt = models.DateTimeField(default=timezone.now)
-    updatedAt = models.DateTimeField(auto_now=True)
     angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True)
     
 
@@ -90,3 +86,10 @@ class Teacher(models.Model):
             return f"{self.user.username}"
         else:
             return f"{self.user.username}"
+
+#cant be put in simak folder ternyata :(
+class DeploymentInfo(models.Model):
+    deployed_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Last Deployment: {self.deployed_at}"
