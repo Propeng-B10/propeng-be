@@ -128,6 +128,9 @@ def add_siswa_to_kelas(request, kelas_id):
 def list_available_homeroom(request):
     """List all teachers, including both active and deleted, and show teachers without homeroom"""
     try:
+        # Import django.db.models for Q objects
+        from django.db.models import Q
+        
         # Filter guru yang tidak menjadi wali kelas (homeroomId is NULL)
         teachers_without_homeroom = Teacher.objects.filter(homeroomId__isnull=True)
         
@@ -342,7 +345,6 @@ def list_kelas(request):
             } for k in kelas
         ]
     }, status=201)
-
 
 '''
 [PBI 10] Melihat Kelas: Detail Kelas
