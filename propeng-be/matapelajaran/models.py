@@ -17,7 +17,6 @@ class MataPelajaran(models.Model):
     angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True)
     createdAt = models.DateTimeField(default=timezone.now)
     updatedAt = models.DateTimeField(auto_now=True)
-    expiredAt = models.DateField(null=True, blank=True) 
     
     teacher = models.ForeignKey(
         Teacher, 
@@ -32,23 +31,10 @@ class MataPelajaran(models.Model):
         related_name="matapelajaran_diikuti"
     )
 
-    is_archived = models.BooleanField(default=False)
-
     def save(self, *args, **kwargs):
         if not self.kode:  # Auto-generate kode if not provided
             self.kode = f"{self.kategoriMatpel.replace('_', '').upper()}_{self.tahunAjaran}"
         super().save(*args, **kwargs)
-
-
-    def archive(self):
-        """Method to archive the subject"""
-        self.is_archived = True
-        self.save()
-
-    def unarchive(self):
-        """Method to unarchive the subject"""
-        self.is_archived = False
-        self.save()
 
     def __str__(self):
         return f"{self.get_kategoriMatpel_display()} ({self.kode}) - Tahun {self.tahunAjaran}"
