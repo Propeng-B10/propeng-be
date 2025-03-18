@@ -3,6 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.hashers import make_password
 from django.contrib.admin.sites import AdminSite
 from .models import User, Student, Teacher
+from kelas.models import Kelas
+from matapelajaran.models import MataPelajaran
 from django import forms
 from rest_framework import serializers
 from user.models import DeploymentInfo
@@ -35,15 +37,12 @@ class CustomUserAdmin(UserAdmin):
     # Include custom fields in the admin form
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
-        ('Personal Info', {'fields': ('first_name', 'last_name', 'email')}),
         ('Role Information', {'fields': ('role',)}),
-        ('Permissions', {'fields': ('is_staff', 'is_active', 'is_superuser', 'groups', 'user_permissions')}),
-        ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('username', 'password1', 'password2', 'role','is_staff', 'is_active')}
+            'fields': ('username', 'role', 'is_active')}
         ),
     )
     
@@ -92,14 +91,12 @@ class CustomTeacherAdmin(admin.ModelAdmin):
     # role = 'teacher'
     # Include custom fields in the admin form
     fieldsets = (
-        (None, {'fields': ('username', 'password')}),
-        ('Personal Info', {'fields': ('first_name', 'last_name', 'email')}),
-        ('Important dates', {'fields': ('last_login', 'date_joined')}),
+        (None, {'fields': ('username','name','nisp')}),
     )
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('username', 'password1', 'password2')}
+            'fields': ('username','name','nisp')}
         ),
     )
     
@@ -147,14 +144,12 @@ class CustomStudentAdmin(admin.ModelAdmin):
     # role = 'teacher'
     # Include custom fields in the admin form
     fieldsets = (
-        (None, {'fields': ('username', 'password')}),
-        ('Personal Info', {'fields': ('first_name', 'last_name', 'email')}),
-        ('Important dates', {'fields': ('last_login', 'date_joined')}),
+        (None, {'fields': ('username','name','nisn')}),
     )
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('username', 'password1', 'password2')}
+            'fields': ('username','name','nisn')}
         ),
     )
     
@@ -184,6 +179,52 @@ class CustomStudentAdmin(admin.ModelAdmin):
 class DeploymentInfoAdmin(admin.ModelAdmin):
     list_display = ('deployed_at',)
 
+
+class MataPelajaranAdmin(admin.ModelAdmin):
+    list_display = ('nama', 'kategoriMatpel', 'tahunAjaran', 'angkatan', 'teacher', 'isActive')
+    list_filter = ('kategoriMatpel', 'tahunAjaran', 'angkatan', 'isActive')
+    search_fields = ('nama', 'kode', 'teacher__name')
+    readonly_fields = ('kode', 'createdAt', 'updatedAt')
+    filter_horizontal = ('siswa_terdaftar',)
+
+    fieldsets = (
+        (None, {
+            'fields': ('nama', 'kode', 'kategoriMatpel')
+        }),
+        ('Informasi Akademik', {
+            'fields': ('tahunAjaran', 'angkatan', 'teacher')
+        }),
+        ('Status', {
+            'fields': ('isActive', 'isDeleted')
+        }),
+        ('Siswa', {
+            'fields': ('siswa_terdaftar',)
+        }),
+        ('Timestamps', {
+            'fields': ('createdAt', 'updatedAt'),
+            'classes': ('collapse',)
+        })
+    )
+class KelasAdmin(admin.ModelAdmin):
+    list_display = ('namaKelas', 'waliKelas', 'tahunAjaran', 'angkatan')
+    list_filter = ('tahunAjaran', 'angkatan')
+    search_fields = ('namaKelas', 'waliKelas__name')
+    filter_horizontal = ('siswa',)
+
+    fieldsets = (
+        (None, {
+            'fields': ('namaKelas',)
+        }),
+        ('Informasi Kelas', {
+            'fields': ('waliKelas', 'tahunAjaran', 'angkatan')
+        }),
+        ('Siswa', {
+            'fields': ('siswa',)
+        })
+    )
+
+admin_site.register(Kelas, KelasAdmin)
+admin_site.register(MataPelajaran, MataPelajaranAdmin)
 admin_site.register(User, CustomUserAdmin)  # Admin users
 admin_site.register(Teacher, CustomTeacherAdmin)
 admin_site.register(Student, CustomStudentAdmin)
