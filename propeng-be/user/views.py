@@ -74,7 +74,6 @@ def list_teacher(request):
                 "username": teacher.user.username,  # Using synchronized username
                 "nisp": teacher.nisp,
                 "angkatan": teacher.angkatan.angkatan if teacher.angkatan else None, 
-                "homeroomId": teacher.homeroomId.id if teacher.homeroomId else None, 
                 "isActive": teacher.user.is_active
             }
             teacher_list.append(teacher_data)
@@ -120,7 +119,8 @@ def profile(request, id):
                     "name": student.name,
                     "nisn": student.nisn,
                     "angkatan": student.angkatan.angkatan if student.angkatan else None,
-                    "status": "Deleted" if student.isDeleted else "Active"
+                    "status": "Deleted" if student.isDeleted else "Active",
+                    "isAssignedtoClass":student.isAssignedtoClass
                 })
             else:
                 return Response({
@@ -135,7 +135,6 @@ def profile(request, id):
                     "name": teacher.name,
                     "nisp": teacher.nisp,
                     "angkatan":teacher.angkatan.angkatan if teacher.angkatan else None,
-                    "homeroomId": teacher.homeroomId,
                     "isActive": user.is_active
                 })
             else:
@@ -211,7 +210,7 @@ def list_homeroom_teachers(request):
                 "username": teacher.user.username,
                 "nisp": teacher.nisp,
                 "angkatan":teacher.angkatan.angkatan if teacher.angkatan else None,
-                "homeroomId": teacher.homeroomId,
+                "homeroomId": teacher.homeroomId.namaKelas,
                 "isActive": teacher.user.is_active
             }
             teacher_list.append(teacher_data)
@@ -377,6 +376,7 @@ def protected_view(request):
                 user_data["id"] = student.user_id  # Use student ID
                 user_data["nisn"] = student.nisn
                 user_data["angkatan"] = student.angkatan
+                user_data["isAssignedtoClass"] = student.isAssignedtoClass
             else:
                 return Response({"error": "Student record not found"}, status=404)
 
@@ -386,7 +386,6 @@ def protected_view(request):
                 user_data["name"] = teacher.name
                 user_data["id"] = teacher.user_id  # Use teacher ID
                 user_data["nisp"] = teacher.nisp
-                user_data["homeroom_id"] = teacher.homeroomId
                 user_data["angkatan"] = teacher.angkatan
             else:
                 return Response({"error": "Teacher record not found"}, status=404)

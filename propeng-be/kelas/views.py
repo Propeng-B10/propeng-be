@@ -78,7 +78,7 @@ def add_siswa_to_kelas(request, kelas_id):
     try:
         data = request.data
         students_id = data.get("students", [])  # List of student IDs
-    
+        angkatan = data.get("angkatan")
 
         try:
             kelas = Kelas.objects.get(id=kelas_id)
