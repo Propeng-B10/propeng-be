@@ -128,21 +128,26 @@ def add_siswa_to_kelas(request, kelas_id):
 def list_available_homeroom(request):
     """List all teachers, including both active and deleted, and show teachers without homeroom"""
     try:
-        # Import django.db.models for Q objects
-        from django.db.models import Q
-        
-        # Filter guru yang tidak menjadi wali kelas (homeroomId is NULL)
+        # Get teachers with no homeroom assignment
         teachers_without_homeroom = Teacher.objects.filter(homeroomId__isnull=True)
         
-        # Also include teachers whose homeroomId points to a deleted or inactive class
-        teachers_with_deleted_homeroom = Teacher.objects.filter(
+        # Get teachers whose homeroom is deleted or inactive
+        teachers_with_inactive_homeroom = Teacher.objects.filter(
             Q(homeroomId__isDeleted=True) | 
             Q(homeroomId__isActive=False)
         )
         
         # Combine the two querysets
-        available_teachers = (teachers_without_homeroom | teachers_with_deleted_homeroom).distinct()
+        available_teachers = (teachers_without_homeroom | teachers_with_inactive_homeroom).distinct()
 
+        # Debug: Print the SQL query being executed
+        print(available_teachers.query)
+        
+        # Debug: Check if Mira Susanti exists in the database
+        mira = Teacher.objects.filter(name__icontains='Mira Susanti').first()
+        if mira:
+            print(f"Mira found: {mira.name}, homeroomId: {mira.homeroomId}")
+        
         if not available_teachers.exists():
             return JsonResponse({
                 "status": 404,
@@ -224,7 +229,7 @@ def create_kelas(request):
         angkatan = data.get('angkatan')
         siswa_ids = data.get('siswa', [])
 
-         # **Hapus prefix "Kelas " jika ada di awal nama_kelas**
+        # **Hapus prefix "Kelas " jika ada di awal nama_kelas**
         nama_kelas = re.sub(r'^Kelas\s+', '', nama_kelas, flags=re.IGNORECASE)
 
         tahun_ajaran, created = TahunAjaran.objects.get_or_create(
@@ -233,15 +238,15 @@ def create_kelas(request):
 
         waliKelas = Teacher.objects.get(user_id=wali_kelas_id)
 
-        # **Cek apakah wali kelas sudah memiliki homeroomId di kelas aktif lain**
-        if Kelas.objects.filter(waliKelas=waliKelas, isActive=True).exists():
+        # FIXED: Check if this teacher is assigned as waliKelas in any active, non-deleted class
+        if Kelas.objects.filter(waliKelas=waliKelas, isActive=True, isDeleted=False).exists():
             return JsonResponse({
                 "status": 400,
                 "errorMessage": "Wali kelas ini sudah terdaftar di kelas lain."
             }, status=400)
 
         # **RESET homeroomId jika tidak cocok dengan kelas aktif mana pun**
-        if waliKelas.homeroomId and not Kelas.objects.filter(id=waliKelas.homeroomId.id, isActive=True).exists():
+        if waliKelas.homeroomId and (waliKelas.homeroomId.isDeleted or not waliKelas.homeroomId.isActive):
             waliKelas.homeroomId = None
             waliKelas.save()
 
@@ -696,8 +701,10 @@ def delete_multiple_kelas(request):
             # Update homeroom teacher
             wali_kelas = kelas.waliKelas
             if wali_kelas and wali_kelas.homeroomId and wali_kelas.homeroomId.id == kelas.id:
+                print(f"Before: Teacher {wali_kelas.name} has homeroomId {wali_kelas.homeroomId}")
                 wali_kelas.homeroomId = None
                 wali_kelas.save()
+                print(f"After: Teacher {wali_kelas.name} has homeroomId {wali_kelas.homeroomId}")
             
             kelas.save()
             deleted_count += 1
