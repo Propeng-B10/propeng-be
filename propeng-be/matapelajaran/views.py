@@ -117,7 +117,7 @@ def update_mata_pelajaran(request, pk):
             data['status'] = True
         if data['status'].lower() == "inactive":
             data["status"] = False
-            
+
     
     # Create serializer with the instance and data
     serializer = MataPelajaranSerializer(matapelajaran, data=data, partial=partial)
@@ -227,6 +227,7 @@ def get_mata_pelajaran_by_id(request, pk):
             "jumlah_siswa": student_count,
             "siswa_terdaftar": siswa_terdaftar_list  # Added this field
         }
+        
         
         return Response({
             "status": 200,
