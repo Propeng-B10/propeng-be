@@ -769,7 +769,8 @@ def list_users(request):
                 student = Student.objects.get(user=user)
                 user_data.update({
                     'name': student.name,
-                    'angkatan':student.angkatan.angkatan
+                    'angkatan':student.angkatan.angkatan,
+                    'isAssignedtoClass':student.isAssignedtoClass
                 })
             except Student.DoesNotExist:
                 pass
@@ -778,7 +779,8 @@ def list_users(request):
                 teacher = Teacher.objects.get(user=user)
                 user_data.update({
                     'name': teacher.name,
-                    'angkatan':teacher.angkatan.angkatan
+                    'angkatan':teacher.angkatan.angkatan,
+                    'homeroomId':teacher.homeroomId
                 })
             except Teacher.DoesNotExist:
                 pass

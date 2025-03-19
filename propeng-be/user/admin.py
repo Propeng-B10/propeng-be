@@ -87,7 +87,7 @@ class CustomTeacherAdminForm(forms.ModelForm):
 class CustomTeacherAdmin(admin.ModelAdmin):
     form = CustomUserAdminForm
     model = User
-    list_display = ('name', 'username', 'nisp', 'homeroomId', 'isActive', 'isDeleted')
+    list_display = ('name', 'username', 'nisp', 'homeroomId', 'isActive', 'isDeleted','homeroomId')
     # role = 'teacher'
     # Include custom fields in the admin form
     fieldsets = (
@@ -140,7 +140,7 @@ class CustomStudentAdminForm(forms.ModelForm):
 class CustomStudentAdmin(admin.ModelAdmin):
     form = CustomUserAdminForm
     model = User
-    list_display = ('name', 'username', 'nisn', 'angkatan', 'isActive', 'isDeleted')
+    list_display = ('name', 'username', 'nisn', 'angkatan', 'isActive', 'isDeleted','isAssignedtoClass')
     # role = 'teacher'
     # Include custom fields in the admin form
     fieldsets = (
