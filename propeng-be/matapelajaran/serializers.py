@@ -11,7 +11,7 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
     siswa_terdaftar = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)
     tahunAjaran = serializers.IntegerField(write_only=True)
     angkatan = serializers.IntegerField(write_only=True, required=True)
-    status = serializers.SerializerMethodField()
+    status = serializers.BooleanField(required=False)
     
     class Meta:
         model = MataPelajaran
@@ -20,12 +20,6 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
 
     def get_status(self, obj):
         return "Active" if obj.isActive else "Inactive"
-
-    def to_internal_value(self, data):
-        if 'status' in data:
-            data['isActive'] = data['status'] == "Active"
-            del data['status']
-        return super().to_internal_value(data)
 
     def validate_teacher(self, value):
         """
@@ -66,6 +60,8 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         Process TahunAjaran data and validate unique name.
         """
         # Get or create TahunAjaran
+        print("cokkk here")
+        print(data)
         tahun = data.get('tahunAjaran')
         angkatann = data.get("angkatan")
         try:
@@ -166,6 +162,7 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         Update a MataPelajaran with proper handling of relationships.
         """
         # Extract related objects if present
+        print(validated_data)
         tahun_ajaran_instance = None
         if 'tahunAjaran_instance' in validated_data:
             tahun_ajaran_instance = validated_data.pop('tahunAjaran_instance')
@@ -186,10 +183,13 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
             instance.kategoriMatpel = validated_data["kategoriMatpel"]
         if 'nama' in validated_data:
             instance.nama = validated_data["nama"]
+        print("disisni deh")
+        print(validated_data)
         if 'status' in validated_data:
-            if validated_data["status"] == "Active":
+            print("status")
+            if validated_data["status"] == True:
                 instance.isActive = True
-            if validated_data["status"] == "Inactive":
+            if validated_data["status"] == False:
                 instance.isActive = False
         if 'kategoriMatpel' in validated_data:
             instance.kategoriMatpel = validated_data["kategoriMatpel"]

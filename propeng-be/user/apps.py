@@ -6,9 +6,22 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
     from user.models import User, Teacher, Student
     from tahunajaran.models import TahunAjaran, Angkatan
     # Create admin user if it doesn't exist
-    if not User.objects.filter(username='adminNext').exists():
+    if not User.objects.filter(username='adminnext').exists():
         User.objects.create(
-            username='adminNext',
+            username='adminnext',
+            email='admin@example.com',
+            password=make_password('testpass1234'),
+            role='admin',
+            is_staff=True,
+            is_superuser=True,
+            is_active=True
+        )
+        print("Admin user 'adminNext' created successfully!")
+    else:
+        User.objects.filter(username="adminNext").delete()
+        print("Deleting user 'adminNext' created successfully!")
+        User.objects.create(
+            username='adminnext',
             email='admin@example.com',
             password=make_password('testpass1234'),
             role='admin',

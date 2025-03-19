@@ -115,8 +115,11 @@ def update_mata_pelajaran(request, pk):
     if 'status' in data:
         if data['status'].lower() == "active":
             data['status'] = True
-        if data['status'].lower() == "inactive":
+            print("kerun")
+        elif data['status'].lower() == "inactive":
             data["status"] = False
+            print("kerunn")
+        print(data)
 
     
     # Create serializer with the instance and data

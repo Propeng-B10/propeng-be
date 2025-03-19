@@ -364,7 +364,7 @@ def protected_view(request):
 
         # Initialize response data
         user_data = {
-            "id": user.id,  # Store the original user ID
+            "user_id": user.id,  # Store the original user ID
             "username": user.username,
             "role": user.role
         }
@@ -376,7 +376,7 @@ def protected_view(request):
                 user_data["name"] = student.name
                 user_data["id"] = student.user_id  # Use student ID
                 user_data["nisn"] = student.nisn
-                user_data["angkatan"] = student.angkatan.angkatan if student.angkatan else None
+                user_data["angkatan"] = student.angkatan
             else:
                 return Response({"error": "Student record not found"}, status=404)
 
@@ -387,7 +387,7 @@ def protected_view(request):
                 user_data["id"] = teacher.user_id  # Use teacher ID
                 user_data["nisp"] = teacher.nisp
                 user_data["homeroom_id"] = teacher.homeroomId
-                user_data["angkatan"] = teacher.angkatan.angkatan if teacher.angkatan else None
+                user_data["angkatan"] = teacher.angkatan
             else:
                 return Response({"error": "Teacher record not found"}, status=404)
 
@@ -535,7 +535,6 @@ def edit_user(request, id):
 
         if "username" in data and data["username"] != user.username:
             usernamee = data["username"].lower()
-            print(usernamee)
             if User.objects.filter(username=usernamee).exclude(id=user.id).exists():
                 return Response({
                 "status": 400,
