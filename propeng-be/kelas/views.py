@@ -332,7 +332,7 @@ def list_kelas(request):
 
     if not kelas.exists():
         return JsonResponse({
-            "status": 400,
+            "status": 404,
             "errorMessage": "Belum ada kelas yang terdaftar! Silahkan menambahkan kelas baru."
         }, status=400)
 
