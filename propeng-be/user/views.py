@@ -586,10 +586,6 @@ def edit_user(request, id):
                     updated_fields.append("name")
                     student.name = data["name"]
                 if "nisn" in data and data["nisn"] != student.nisn:
-                    try:
-                        nomorInduk = int(data["nisn"])
-                    except:
-                        raise serializers.ValidationError({"status":"400","Message":"Nomor induk harus berupa angka!"})
                     if Student.objects.filter(nisn=data["nisn"]).exclude(user_id=user.id).exists():
                         return Response({
                             "status": 400,
@@ -628,7 +624,7 @@ def edit_user(request, id):
                     teacher.name = data["name"]
                 if "nisp" in data and data["nisp"] != teacher.nisp:
                     try:
-                        nomorInduk = int(data["nisn"])
+                        nomorInduk = int(data["nisp"])
                     except:
                         raise serializers.ValidationError({"status":"400","Message":"Nomor induk harus berupa angka!"})
                     # Check if NISP already exists for another teacher
