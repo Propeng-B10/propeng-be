@@ -64,7 +64,7 @@ def list_matapelajaran(request):
                     "name": teacher_name
                 },
                 "jumlah_siswa": student_count,
-                "status": "Archived" if mapel.is_archived else "Active",
+                "status": "Active" if mapel.isActive else "Inactive",
                 "angkatan":mapel.angkatan.angkatan if mapel.angkatan else None
             }
             matapelajaran_list.append(mapel_data)
@@ -112,6 +112,12 @@ def update_mata_pelajaran(request, pk):
                 "message": f"Error with TahunAjaran: {str(e)}",
                 "error": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+    if 'status' in data:
+        if data['status'].lower() == "active":
+            data['status'] = True
+        if data['status'].lower() == "inactive":
+            data["status"] = False
+
     
     # Create serializer with the instance and data
     serializer = MataPelajaranSerializer(matapelajaran, data=data, partial=partial)
@@ -119,8 +125,6 @@ def update_mata_pelajaran(request, pk):
     if serializer.is_valid():
         try:
             updated_matapelajaran = serializer.save()
-            
-            # Prepare response
             return Response({
                 "status": 200,
                 "message": "MataPelajaran updated successfully",
@@ -154,27 +158,28 @@ def delete_mata_pelajaran(request, pk):
             "status": 404,
             "message": "MataPelajaran not found"
         }, status=status.HTTP_404_NOT_FOUND)
-    
+
     try:
         # Store information for response before deletion
         matapelajaran_info = {
             "id": matapelajaran.id,
             "nama": matapelajaran.nama,
-            "angkatan":matapelajaran.angkatan,
+            "angkatan": matapelajaran.angkatan.id if matapelajaran.angkatan else None, 
             "kategoriMatpel": matapelajaran.get_kategoriMatpel_display(),
             "tahunAjaran": matapelajaran.tahunAjaran.tahunAjaran if matapelajaran.tahunAjaran else None
         }
-        
-        # Delete the MataPelajaran
+
+        # Soft-delete the MataPelajaran
         matapelajaran.isDeleted = True
         matapelajaran.save()
+
         # Return success response with deleted item info
         return Response({
             "status": 200,
             "message": "MataPelajaran deleted successfully",
             "deleted_item": matapelajaran_info
         }, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -199,6 +204,15 @@ def get_mata_pelajaran_by_id(request, pk):
     try:
         teacher_name = matapelajaran.teacher.name if matapelajaran.teacher else None
         student_count = matapelajaran.siswa_terdaftar.count()
+
+        # Retrieve students
+        siswa_terdaftar_list = [
+            {
+                "id": student.user_id,
+                "name": student.name,
+                "username": student.username
+            } for student in matapelajaran.siswa_terdaftar.all()
+        ]
         
         matapelajaran_data = {
             "id": matapelajaran.id,
@@ -210,8 +224,10 @@ def get_mata_pelajaran_by_id(request, pk):
                 "id": matapelajaran.teacher.user_id if matapelajaran.teacher else None,
                 "name": teacher_name
             },
-            "jumlah_siswa": student_count
+            "jumlah_siswa": student_count,
+            "siswa_terdaftar": siswa_terdaftar_list  # Added this field
         }
+        
         
         return Response({
             "status": 200,

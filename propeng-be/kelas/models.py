@@ -8,7 +8,8 @@ from datetime import date
 class Kelas(models.Model):
     namaKelas = models.CharField(max_length=100)    
     tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)           
-    isActive = models.BooleanField(default=True)            
+    isActive = models.BooleanField(default=True)  
+    isDeleted = models.BooleanField(default=False)          
     angkatan = models.IntegerField(null=False, blank=False, default=2023)
     waliKelas = models.ForeignKey(
         Teacher,

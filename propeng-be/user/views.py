@@ -552,9 +552,13 @@ def edit_user(request, id):
                 "message": "Tidak dapat mengubah role user. Silakan hapus user dan buat baru dengan role yang sesuai."
             }, status=status.HTTP_400_BAD_REQUEST)
         print(data)
-        active_state = data["isActive"]
-        active_state = active_state
+        if "password" in data:
+            print("ini kejalan")
+            user.set_password(data['password'])
+            updated_fields.append("password")
         if "isActive" in data:
+            active_state = data["isActive"]
+            active_state = active_state
             print(active_state)
             if active_state == "true" or active_state=="True" or active_state == True:
                 updated_fields.append("isActive")
@@ -675,7 +679,8 @@ def edit_user(request, id):
                     "user_id": user.id,
                     "username": user.username,
                     "email": user.email,
-                    "role": user.role
+                    "role": user.role,
+                    "password":"Password berhasil diganti"
                 }
             }
         
