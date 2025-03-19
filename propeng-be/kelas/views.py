@@ -24,29 +24,29 @@ def list_available_student_by_angkatan(request, angkatan):
             angkatan += 2000 
         print(angkatan)
         try:
+            print("try")
             angkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
         except:
             return JsonResponse({
                 "status": 404,
                 "errorMessage": f"Tidak terdapat angkatan tersebut ({angkatan}) pada sistem."
             }, status=404)
-        # Ambil semua siswa di angkatan tersebut
-        siswa_list = Student.objects.filter(angkatan=angkatanObj)
 
-        # Ambil siswa yang sudah masuk dalam kelas aktif dan tidak dihapus
-        siswa_dalam_kelas_aktif = Student.objects.filter(
-            siswa__isActive=True,
-            siswa__isDeleted=False,
+        print(angkatanObj.angkatan)
+        print(angkatanObj.id)
+        siswa_dalam_kelas_yang_ga_aktif = Student.objects.filter(
+            isActive=True,
+            isDeleted=False,
             angkatan=angkatanObj.id,
             isAssignedtoClass=False
-        ).distinct()
-        print(siswa_dalam_kelas_aktif)
+        )
+        print(siswa_dalam_kelas_yang_ga_aktif)
         print("heree")
         
         # Ambil siswa yang belum masuk kelas atau hanya masuk kelas yang tidak aktif/dihapus
         # Changed id__in to user_id__in to match the model's field
-
-        if not siswa_dalam_kelas_aktif.exists():
+#
+        if not siswa_dalam_kelas_yang_ga_aktif.exists():
             return JsonResponse({
                 "status": 404,
                 "errorMessage": f"Tidak ada siswa yang tersedia untuk angkatan {angkatan}."
@@ -63,7 +63,7 @@ def list_available_student_by_angkatan(request, angkatan):
                     "nisn": s.nisn,
                     "username": s.username,
                     "angkatan": s.angkatan.angkatan
-                } for s in siswa_dalam_kelas_aktif
+                } for s in siswa_dalam_kelas_yang_ga_aktif
             ]
         }, status=200)
 
@@ -289,7 +289,10 @@ def create_kelas(request):
             angkatan=angkatan,
             isActive=True
         )
-
+        print(kelas.isActive)
+        kelas.isActive = True
+        kelas.save()
+        print(kelas.isActive)
         kelas.siswa.set(siswa_list)
         # Update siswa yang masuk ke kelas baru sebagai `isAssignedtoClass = True`
         Student.objects.filter(user_id__in=siswa_ids).update(isAssignedtoClass=True)
