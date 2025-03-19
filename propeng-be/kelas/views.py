@@ -22,8 +22,9 @@ def list_available_student_by_angkatan(request, angkatan):
         angkatan = int(angkatan)
         if angkatan < 100:  
             angkatan += 2000 
+        print(angkatan)
         try:
-            angkatanObj, created = Angkatan.objects.filter(angkatan=angkatan)
+            angkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
         except:
             return JsonResponse({
                 "status": 404,
@@ -36,15 +37,16 @@ def list_available_student_by_angkatan(request, angkatan):
         siswa_dalam_kelas_aktif = Student.objects.filter(
             siswa__isActive=True,
             siswa__isDeleted=False,
-            angkatan=angkatan
+            angkatan=angkatanObj.id,
+            isAssignedtoClass=False
         ).distinct()
         print(siswa_dalam_kelas_aktif)
+        print("heree")
         
         # Ambil siswa yang belum masuk kelas atau hanya masuk kelas yang tidak aktif/dihapus
         # Changed id__in to user_id__in to match the model's field
-        siswa_tanpa_kelas_aktif = siswa_list.exclude(user_id__in=siswa_dalam_kelas_aktif.values_list('user_id', flat=True))
 
-        if not siswa_tanpa_kelas_aktif.exists():
+        if not siswa_dalam_kelas_aktif.exists():
             return JsonResponse({
                 "status": 404,
                 "errorMessage": f"Tidak ada siswa yang tersedia untuk angkatan {angkatan}."
@@ -60,8 +62,8 @@ def list_available_student_by_angkatan(request, angkatan):
                     "isAssignedtoClass": s.isAssignedtoClass,
                     "nisn": s.nisn,
                     "username": s.username,
-                    "angkatan": s.angkatan
-                } for s in siswa_tanpa_kelas_aktif
+                    "angkatan": s.angkatan.angkatan
+                } for s in siswa_dalam_kelas_aktif
             ]
         }, status=200)
 
