@@ -761,16 +761,12 @@ def list_users(request):
             'createdAt':user.createdAt,
             'updatedAt':user.updatedAt
         }
-    
-        # test
-        # Add role-specific data
         if user.role == 'student':
             try:
                 student = Student.objects.get(user=user)
                 user_data.update({
                     'name': student.name,
-                    'angkatan':student.angkatan.angkatan,
-                    'isAssignedtoClass':student.isAssignedtoClass
+                    'angkatan':student.angkatan.angkatan
                 })
             except Student.DoesNotExist:
                 pass
@@ -779,8 +775,7 @@ def list_users(request):
                 teacher = Teacher.objects.get(user=user)
                 user_data.update({
                     'name': teacher.name,
-                    'angkatan':teacher.angkatan.angkatan,
-                    'homeroomId':teacher.homeroomId
+                    'angkatan':teacher.angkatan.angkatan
                 })
             except Teacher.DoesNotExist:
                 pass

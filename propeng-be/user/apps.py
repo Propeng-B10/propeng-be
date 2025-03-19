@@ -282,6 +282,8 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
     # Add students to class
     for student in students:
         kelas.siswa.add(student)
+        student.isAssignedtoClass = True
+        student.save()
     
     print(f'Created kelas: {kelas_data["namaKelas"]}')
     print('Database population completed!')
