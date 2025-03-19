@@ -7,6 +7,7 @@ from tahunajaran.models import TahunAjaran
 import re
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q  
+from tahunajaran.models import Angkatan
 
 
 '''
@@ -20,10 +21,16 @@ def list_available_student_by_angkatan(request, angkatan):
         # Normalisasi angkatan (misal: 23 → 2023, 2023 → tetap 2023)
         angkatan = int(angkatan)
         if angkatan < 100:  
-            angkatan += 2000  
-
+            angkatan += 2000 
+        try:
+            angkatanObj, created = Angkatan.objects.filter(angkatan=angkatan)
+        except:
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": f"Tidak terdapat angkatan tersebut ({angkatan}) pada sistem."
+            }, status=404)
         # Ambil semua siswa di angkatan tersebut
-        siswa_list = Student.objects.filter(angkatan=angkatan)
+        siswa_list = Student.objects.filter(angkatan=angkatanObj)
 
         # Ambil siswa yang sudah masuk dalam kelas aktif dan tidak dihapus
         siswa_dalam_kelas_aktif = Student.objects.filter(
@@ -31,6 +38,7 @@ def list_available_student_by_angkatan(request, angkatan):
             siswa__isDeleted=False,
             angkatan=angkatan
         ).distinct()
+        print(siswa_dalam_kelas_aktif)
         
         # Ambil siswa yang belum masuk kelas atau hanya masuk kelas yang tidak aktif/dihapus
         # Changed id__in to user_id__in to match the model's field
