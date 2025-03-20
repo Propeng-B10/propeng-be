@@ -171,11 +171,7 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         
         teacher_user = validated_data.pop('teacher', None)
         students_users = validated_data.pop('siswa_terdaftar', None)
-        # try:
-        #     angkatanobj, created = Angkatan.objects.get_or_create(angkatan=angkatan_instance_lagi)
-        # except Exception as e:
-        #     raise serializers.ValidationError(f"Error mendapatkan TahunAjaran: {str(e)}")
-        # Update simple fields
+        # deleted
         for i, z in validated_data.items():
             print(f'ini i : {i} kalo ini z : {z}')
             instance.i = z
