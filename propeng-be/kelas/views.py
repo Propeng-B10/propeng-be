@@ -8,6 +8,7 @@ import re
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q  
 from tahunajaran.models import Angkatan
+from absensi.models import *
 
 
 '''
@@ -672,6 +673,8 @@ def delete_siswa_from_kelas(request, kelas_id, siswa_id):
 def delete_multiple_kelas(request):
     try:
         data = request.data
+        # 1 2 3 4
+        # 3 4 --> absen --> gabisa delete
         class_ids = data.get('class_ids', [])
         
         if not class_ids:
@@ -692,6 +695,12 @@ def delete_multiple_kelas(request):
         deleted_count = 0
         for kelas in classes:
             # Set isDeleted to True (Soft Delete)
+            undeleted_classes = []
+            if AbsensiHarian.objects.filter(kelas=kelas.id).count() != 0:
+                undeleted_classes.append(kelas.namaKelas)
+                continue
+                
+
             kelas.isDeleted = True
             
             # Set isAssignedtoClass = False for all students in this class
@@ -710,12 +719,19 @@ def delete_multiple_kelas(request):
             
             kelas.save()
             deleted_count += 1
-        
-        return JsonResponse({
-            "status": 200,
-            "message": f"{deleted_count} kelas berhasil dihapus (soft delete).",
-            "deletedCount": deleted_count
-        }, status=200)
+        undeleted_classes
+        if len(undeleted_classes) == 0:
+            return JsonResponse({
+                "status": 200,
+                "message": f"{deleted_count} kelas berhasil dihapus (soft delete).",
+                "deletedCount": deleted_count
+            }, status=200)
+        else:
+            return JsonResponse({
+                "status": 200,
+                "message": f"{deleted_count} kelas berhasil dihapus terkecuali kelas {undeleted_classes}.",
+                "deletedCount": deleted_count
+            }, status=200)
     
     except Exception as e:
         return JsonResponse({
