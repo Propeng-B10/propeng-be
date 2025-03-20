@@ -294,7 +294,9 @@ def create_kelas(request):
                 "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
                 "totalSiswa": kelas.siswa.count(),
                 "angkatan": kelas.angkatan,
-                "isActive": kelas.isActive
+                "isActive": kelas.isActive,
+                "createdAt": kelas.createdAt.strftime("%d-%m-%Y %H:%M:%S") if kelas.createdAt else None,
+                "updatedAt": kelas.updatedAt.strftime("%d-%m-%Y %H:%M:%S") if kelas.createdAt else None
             }
         }, status=201)
     except Teacher.DoesNotExist:
