@@ -162,7 +162,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-
+CELERY_BROKER_URL = 'redis://localhost:6379/0' 
 TIME_ZONE = 'Asia/Jakarta'  # UTC+7
 
 USE_I18N = True

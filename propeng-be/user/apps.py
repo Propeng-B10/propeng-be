@@ -285,8 +285,12 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
         student.isAssignedtoClass = True
         student.save()
     
+    
     print(f'Created kelas: {kelas_data["namaKelas"]}')
     print('Database population completed!')
+    
+    kelas.generate_kode()
+    print('Kelas sudah ditambahkan satu instance Absensi Harian!')
 
 
 def create_deployment_info(sender, **kwargs):
