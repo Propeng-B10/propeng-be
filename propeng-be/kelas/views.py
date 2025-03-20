@@ -95,6 +95,12 @@ def add_siswa_to_kelas(request, kelas_id):
             kelas.siswa.add(studentTemp.user_id)
             students_name.append(studentTemp)
 
+        # Update isAssignedtoClass flag for all students in this class
+        for student in kelas.siswa.all():
+            student.isAssignedtoClass = True
+            student.save()
+
+
         return JsonResponse({
             "status": 200,
             "message": f"Siswa berhasil ditambahkan ke kelas!",
