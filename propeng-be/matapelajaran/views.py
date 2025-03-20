@@ -115,10 +115,8 @@ def update_mata_pelajaran(request, pk):
     if 'status' in data:
         if data['status'].lower() == "active":
             data['status'] = True
-            print("kerun")
         elif data['status'].lower() == "inactive":
             data["status"] = False
-            print("kerunn")
         print(data)
 
     
@@ -228,9 +226,10 @@ def get_mata_pelajaran_by_id(request, pk):
                 "name": teacher_name
             },
             "jumlah_siswa": student_count,
-            "siswa_terdaftar": siswa_terdaftar_list  # Added this field
+            "siswa_terdaftar": siswa_terdaftar_list,
+            "angkatan": matapelajaran.angkatan.angkatan if matapelajaran.angkatan else None
         }
-        
+
         
         return Response({
             "status": 200,
