@@ -171,7 +171,7 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         
         teacher_user = validated_data.pop('teacher', None)
         students_users = validated_data.pop('siswa_terdaftar', None)
-        # deleted again..
+        # deleted again....
         for i, z in validated_data.items():
             print(f'ini i : {i} kalo ini z : {z}')
             instance.i = z

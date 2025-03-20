@@ -36,7 +36,7 @@ class MataPelajaran(models.Model):
     )
 
     def save(self, *args, **kwargs):
-        if not self.kode:  # Auto-generate kode if not provided
+        if not self.kode: 
             self.kode = f"{self.kategoriMatpel.replace('_', '').upper()}_{self.tahunAjaran}"
         if self.tahunAjaran and not self.expiredAt:
             self.expiredAt = date(self.tahunAjaran.tahunAjaran + 1, 7, 1)

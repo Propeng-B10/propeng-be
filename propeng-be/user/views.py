@@ -372,12 +372,11 @@ def protected_view(request):
             "role": user.role
         }
 
-        # Fetch role-specific ID
         if user.role == "student":
             student = Student.objects.filter(user=user).first()
             if student:
                 user_data["name"] = student.name
-                user_data["id"] = student.user_id  # Use student ID
+                user_data["id"] = student.user_id 
                 user_data["nisn"] = student.nisn
                 user_data["angkatan"] = student.angkatan.angkatan
                 user_data["isAssignedtoClass"] = student.isAssignedtoClass
@@ -388,7 +387,7 @@ def protected_view(request):
             teacher = Teacher.objects.filter(user=user).first()
             if teacher:
                 user_data["name"] = teacher.name
-                user_data["id"] = teacher.user_id  # Use teacher ID
+                user_data["id"] = teacher.user_id 
                 user_data["nisp"] = teacher.nisp
                 user_data["angkatan"] = teacher.angkatan.angkatan
             else:
