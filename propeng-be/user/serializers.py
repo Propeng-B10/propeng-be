@@ -6,15 +6,16 @@ from .models import User, Student, Teacher
 from tahunajaran.models import *
 from django.contrib.auth import get_user_model
 import re
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import make_password, check_password
 
 
 class ChangePasswordSerializer(serializers.ModelSerializer):
+    old_password = serializers.CharField(write_only=True, required=True)
     new_password = serializers.CharField(write_only=True, required=True)
 
     class Meta:
         model = User
-        fields = ['new_password']
+        fields = ['old_password','new_password']
 
     def validate_new_password(self, value):
         """Validate the new password for strength."""
@@ -29,13 +30,19 @@ class ChangePasswordSerializer(serializers.ModelSerializer):
 
         if not re.search(r'[0-9]', value):
             raise serializers.ValidationError("Password must contain at least one number")
+        
+
 
         return value
 
     def update(self, instance, validated_data):
-        instance.password = make_password(validated_data['new_password'])  # Hash new password
-        instance.save()
-        return instance
+        if check_password(validated_data["old_password"], instance.password):
+            instance.password = make_password(validated_data['new_password'])  # Hash new password
+            instance.save()
+            return instance
+        else:
+            raise serializers.ValidationError({"status":"400","Message":"Password tidak match dengan password lama!"})
+    
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):

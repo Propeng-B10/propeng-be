@@ -114,13 +114,15 @@ def profile(request, id):
         # Add role-specific data
         if user.role == "student":
             student = Student.objects.filter(user=user).first()
+            active_classes = student.siswa.filter(isActive=True, isDeleted=False).values_list('namaKelas', flat=True)
             if student:
                 profile_data.update({
                     "name": student.name,
                     "nisn": student.nisn,
                     "angkatan": student.angkatan.angkatan if student.angkatan else None,
-                    "status": "Deleted" if student.isDeleted else "Active",
-                    "isAssignedtoClass":student.isAssignedtoClass
+                    "isActive": student.isActive,
+                    "isAssignedtoClass":student.isAssignedtoClass,
+                    "activeClasses": list(active_classes)
                 })
             else:
                 return Response({
@@ -130,12 +132,14 @@ def profile(request, id):
                 
         elif user.role == "teacher":
             teacher = Teacher.objects.filter(user=user).first()
+            homeroom_class = teacher.homeroomId.namaKelas if teacher.homeroomId and not teacher.homeroomId.isDeleted and teacher.homeroomId.isActive else None
             if teacher:
                 profile_data.update({
                     "name": teacher.name,
                     "nisp": teacher.nisp,
                     "angkatan":teacher.angkatan.angkatan if teacher.angkatan else None,
-                    "isActive": user.is_active
+                    "isActive": user.is_active,
+                    "homeroomClass": homeroom_class
                 })
             else:
                 return Response({
@@ -452,6 +456,19 @@ def delete_user(request, id):
         if user.role == "student":
             student = Student.objects.filter(user=user).first()
             if student:
+                # kalo true otomatis brrt ada di kelas harusnya T^T
+                if student.siswa.exists():
+                    return Response({
+                        "status": 400,
+                        "message": f"Tidak bisa menghapus siswa {student.name} karena siswa tersebut telah masuk ke suatu Kelas. Silahkan keluarkan siswa tersebut dahulu sebelum menghapus siswa."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+                if student.matapelajaran.exists():
+                    return Response({
+                        "status": 400,
+                        "message": f"Tidak bisa menghapus siswa {student.name} karena siswa tersebut telah masuk ke suatu Mata Pelajaran. Silahkan keluarkan siswa tersebut dahulu sebelum menghapus siswa."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
                 student.isDeleted = True
                 student.save()
                 return Response({
@@ -623,10 +640,6 @@ def edit_user(request, id):
                     updated_fields.append("name")
                     teacher.name = data["name"]
                 if "nisp" in data and data["nisp"] != teacher.nisp:
-                    try:
-                        nomorInduk = int(data["nisp"])
-                    except:
-                        raise serializers.ValidationError({"status":"400","Message":"Nomor induk harus berupa angka!"})
                     # Check if NISP already exists for another teacher
                     if Teacher.objects.filter(nisp=data["nisp"]).exclude(user_id=user.id).exists():
                         return Response({
@@ -759,18 +772,23 @@ def list_users(request):
         if user.role == 'student':
             try:
                 student = Student.objects.get(user=user)
+                active_classes = student.siswa.filter(isActive=True, isDeleted=False).values_list('namaKelas', flat=True)
                 user_data.update({
                     'name': student.name,
-                    'angkatan':student.angkatan.angkatan
+                    'angkatan':student.angkatan.angkatan,
+                    'isAssignedtoClass':student.isAssignedtoClass,
+                    'activeClasses': list(active_classes)
                 })
             except Student.DoesNotExist:
                 pass
         elif user.role == 'teacher':
             try:
                 teacher = Teacher.objects.get(user=user)
+                homeroom_class = teacher.homeroomId.namaKelas if teacher.homeroomId and not teacher.homeroomId.isDeleted and teacher.homeroomId.isActive else None
                 user_data.update({
                     'name': teacher.name,
-                    'angkatan':teacher.angkatan.angkatan
+                    'angkatan':teacher.angkatan.angkatan,
+                    'homeroomClass': homeroom_class
                 })
             except Teacher.DoesNotExist:
                 pass
