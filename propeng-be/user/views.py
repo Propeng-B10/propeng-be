@@ -732,6 +732,7 @@ def edit_user(request, id):
 
 # End update and delete user
 # test commit WKWKKW
+# testtt
 # List all user
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
