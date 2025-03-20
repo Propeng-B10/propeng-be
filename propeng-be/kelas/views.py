@@ -316,7 +316,7 @@ def create_kelas(request):
 def list_kelas(request):
     # Only get non-deleted classes
     kelas = Kelas.objects.filter(isDeleted=False).order_by('-isActive', '-updatedAt')
-
+    
     if not kelas.exists():
         return JsonResponse({
             "status": 404,
@@ -331,7 +331,7 @@ def list_kelas(request):
                 "id": k.id,
                 "namaKelas": re.sub(r'^Kelas\s+', '', k.namaKelas, flags=re.IGNORECASE) if k.namaKelas else None,
                 "tahunAjaran": k.tahunAjaran.tahunAjaran if k.tahunAjaran else None,
-                "waliKelas": str(k.waliKelas) if k.waliKelas else None,
+                "waliKelas": k.waliKelas.name if k.waliKelas else None,
                 "totalSiswa": k.siswa.count(),
                 "angkatan": k.angkatan if k.angkatan >= 1000 else k.angkatan + 2000,
                 "isActive": k.isActive,
@@ -363,6 +363,9 @@ def detail_kelas(request, kelas_id):
         siswa = kelas.siswa.all()
         waliKelas = kelas.waliKelas
 
+        teacher_name = waliKelas.name if waliKelas else None
+        print(teacher_name)
+
         if not waliKelas:
             isEmptySiswainClass = False
             return JsonResponse({
@@ -373,7 +376,7 @@ def detail_kelas(request, kelas_id):
             "id": kelas.id,
             "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
             "tahunAjaran": f"{kelas.tahunAjaran.tahunAjaran}" if kelas.tahunAjaran else None,
-            "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
+            "waliKelas": teacher_name,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
             "angkatan": kelas.angkatan if kelas.angkatan >= 1000 else kelas.angkatan + 2000,
@@ -400,7 +403,7 @@ def detail_kelas(request, kelas_id):
             "id": kelas.id,
             "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
             "tahunAjaran": f"{kelas.tahunAjaran.tahunAjaran}" if kelas.tahunAjaran else None,
-            "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
+            "waliKelas": teacher_name,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
             "angkatan": kelas.angkatan if kelas.angkatan >= 1000 else kelas.angkatan + 2000,
@@ -425,7 +428,7 @@ def detail_kelas(request, kelas_id):
             "id": kelas.id,
             "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
             "tahunAjaran": f"{kelas.tahunAjaran.tahunAjaran}" if kelas.tahunAjaran else None,
-            "waliKelas": f"{kelas.waliKelas}" if kelas.waliKelas else None,
+            "waliKelas": teacher_name,
             "totalSiswa": kelas.siswa.count(),
             "isActive": kelas.isActive,
             "angkatan": kelas.angkatan if kelas.angkatan >= 1000 else kelas.angkatan + 2000,
