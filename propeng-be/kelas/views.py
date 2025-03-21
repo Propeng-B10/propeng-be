@@ -738,3 +738,44 @@ def delete_multiple_kelas(request):
             "status": 500,
             "errorMessage": f"Terjadi kesalahan: {str(e)}"
         }, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_kelas_with_absensi(request):
+    try:
+        semua_kelas = Kelas.objects.filter(isActive=True)
+        
+        if len(semua_kelas) == 0:
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": "Belum ada kelas yang tersedia."
+            }, status=400)
+        for kelas in semua_kelas:
+            # Set isDeleted to True (Soft Delete)
+            kelas_ada_absensi = {}
+            if AbsensiHarian.objects.filter(kelas=kelas.id).count() != 0:
+                data_kelas = []
+                data_kelas.append(f"ID Kelas : {kelas.id}")
+                data_kelas.append(f"Nama Kelas : {kelas.namaKelas}")
+                # for j in (kelas.siswa.all()):
+                #     data_kelas.append(f"Siswa Kelas : {j}")
+                kelas_ada_absensi[kelas.id] = (data_kelas)
+
+        if len(kelas_ada_absensi) == 0:
+            return JsonResponse({
+                "status": 200,
+                "message": f"Tidak terdapat kelas yang memiliki absen"
+            }, status=200)
+        else:
+            return JsonResponse({
+                "status": 200,
+                "message": f"List kelas yang memiliki Absensi berhasil didapatkan.",
+                "kelasYangMemilikiAbsen": kelas_ada_absensi
+            }, status=200)
+    
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)
