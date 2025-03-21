@@ -7,6 +7,7 @@ from kelas.models import Kelas
 from matapelajaran.models import MataPelajaran
 from django import forms
 from rest_framework import serializers
+from absensi.models import *
 from user.models import DeploymentInfo
 
 class SuperuserAdminSite(AdminSite):
@@ -223,6 +224,10 @@ class KelasAdmin(admin.ModelAdmin):
         })
     )
 
+class AbsensiInfoAdmin(admin.ModelAdmin):
+    list_display = ("listSiswa", "kode", "date", "kelas")
+    model = AbsensiHarian
+admin_site.register(AbsensiHarian, AbsensiInfoAdmin)
 admin_site.register(Kelas, KelasAdmin)
 admin_site.register(MataPelajaran, MataPelajaranAdmin)
 admin_site.register(User, CustomUserAdmin)  # Admin users
