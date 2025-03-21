@@ -6,6 +6,7 @@ from .models import MataPelajaran, TahunAjaran, Teacher, Student
 from .serializers import MataPelajaranSerializer
 from user.models import User
 from django.db import connection
+from django.core.exceptions import ValidationError
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -161,6 +162,14 @@ def delete_mata_pelajaran(request, pk):
         }, status=status.HTTP_404_NOT_FOUND)
 
     try:
+        # Check if there are any grades associated with this subject
+        if matapelajaran.nilai_siswa.exists():
+            return Response({
+                "status": 400,
+                "message": "Cannot delete MataPelajaran because it has associated grades. Please delete the grades first.",
+                "error": "Has associated grades"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         # Store information for response before deletion
         matapelajaran_info = {
             "id": matapelajaran.id,
@@ -181,6 +190,12 @@ def delete_mata_pelajaran(request, pk):
             "deleted_item": matapelajaran_info
         }, status=status.HTTP_200_OK)
 
+    except ValidationError as e:
+        return Response({
+            "status": 400,
+            "message": str(e),
+            "error": "Validation Error"
+        }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         import traceback
         traceback.print_exc()

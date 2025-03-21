@@ -1,36 +1,35 @@
 from rest_framework import serializers
 from .models import Nilai
-from user.models import Student
+from user.models import User
 from matapelajaran.models import MataPelajaran
 
 class NilaiSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source='student.name', read_only=True)
-    mata_pelajaran_name = serializers.CharField(source='mata_pelajaran.nama', read_only=True)
-    
     class Meta:
         model = Nilai
-        fields = ['id', 'student', 'student_name', 'mata_pelajaran', 'mata_pelajaran_name', 'nilai', 'createdAt', 'updatedAt']
-        read_only_fields = ['createdAt', 'updatedAt']
+        fields = ['id', 'matapelajaran', 'student', 'jenis_nilai', 'nilai', 'keterangan', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
 
     def validate(self, data):
-        # Check if student exists and is not deleted
+        # Validate that the student exists
         try:
-            student = Student.objects.get(user_id=data['student'].user_id)
-            if student.isDeleted:
-                raise serializers.ValidationError(f"Student {student.name} is deleted")
-        except Student.DoesNotExist:
-            raise serializers.ValidationError("Student does not exist")
+            student = User.objects.get(pk=data['student'].id)
+            if student.role != 'student':
+                raise serializers.ValidationError("Selected user is not a student")
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Selected student does not exist")
 
-        # Check if mata_pelajaran exists and is not deleted
+        # Validate that the mata pelajaran exists
         try:
-            matapelajaran = MataPelajaran.objects.get(id=data['mata_pelajaran'].id)
-            if matapelajaran.isDeleted:
-                raise serializers.ValidationError(f"Mata Pelajaran {matapelajaran.nama} is deleted")
+            matapelajaran = MataPelajaran.objects.get(pk=data['matapelajaran'].id)
         except MataPelajaran.DoesNotExist:
-            raise serializers.ValidationError("Mata Pelajaran does not exist")
+            raise serializers.ValidationError("Selected mata pelajaran does not exist")
 
-        # Check if student is enrolled in the mata_pelajaran
-        if not matapelajaran.siswa_terdaftar.filter(user_id=student.user_id).exists():
-            raise serializers.ValidationError(f"Student {student.name} is not enrolled in {matapelajaran.nama}")
+        # Validate that the student is enrolled in the mata pelajaran
+        if not matapelajaran.siswa_terdaftar.filter(user_id=student.id).exists():
+            raise serializers.ValidationError("Student is not enrolled in this mata pelajaran")
+
+        # Validate nilai range (0-100)
+        if data['nilai'] < 0 or data['nilai'] > 100:
+            raise serializers.ValidationError("Nilai must be between 0 and 100")
 
         return data 
