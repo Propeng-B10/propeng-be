@@ -230,9 +230,9 @@ def create_kelas(request):
         tahun_ajaran, created = TahunAjaran.objects.get_or_create(
             tahunAjaran=tahun_ajaran_id
         )
-
+        print(wali_kelas_id)
         waliKelas = Teacher.objects.get(user_id=wali_kelas_id)
-
+        print(wali_kelas_id)
         # FIXED: Check if this teacher is assigned as waliKelas in any active, non-deleted class
         if Kelas.objects.filter(waliKelas=waliKelas, isActive=True, isDeleted=False).exists():
             return JsonResponse({
@@ -241,10 +241,11 @@ def create_kelas(request):
             }, status=400)
 
         # **RESET homeroomId jika tidak cocok dengan kelas aktif mana pun**
+        print("gagal disisni")
         if waliKelas.homeroomId and (waliKelas.homeroomId.isDeleted or not waliKelas.homeroomId.isActive):
             waliKelas.homeroomId = None
             waliKelas.save()
-
+        print("gagal dahh")
         if not nama_kelas:
             return JsonResponse({
                 "status": 400,
@@ -255,7 +256,7 @@ def create_kelas(request):
         siswa_list = Student.objects.filter(user_id__in=siswa_ids)
         found_siswa_ids = set(siswa_list.values_list('user_id', flat=True))
         missing_siswa_ids = set(siswa_ids) - found_siswa_ids
-
+        print("kokk")
         if missing_siswa_ids:
             return JsonResponse({
                 "status": 400,
@@ -265,7 +266,7 @@ def create_kelas(request):
         # Normalisasi angkatan agar selalu dalam format 4 digit (2023, 2025, dst.)
         if angkatan < 100:
             angkatan += 2000  # Ubah 23 -> 2023, 25 -> 2025
-
+        
         # **Membuat kelas**
         kelas = Kelas.objects.create(
             namaKelas=nama_kelas,
@@ -745,21 +746,30 @@ def delete_multiple_kelas(request):
 def get_kelas_with_absensi(request):
     try:
         semua_kelas = Kelas.objects.all()
+        print(semua_kelas)
         
         if len(semua_kelas) == 0:
             return JsonResponse({
                 "status": 400,
                 "errorMessage": "Belum ada kelas yang tersedia."
             }, status=400)
+        kelas_ada_absensi = {}
         for kelas in semua_kelas:
             # Set isDeleted to True (Soft Delete)
-            kelas_ada_absensi = {}
-            if AbsensiHarian.objects.filter(kelas=kelas.id).count() != 0:
+            print(kelas.id)
+            print(kelas.namaKelas)
+            print(AbsensiHarian.objects.filter(kelas=kelas.id))
+            if AbsensiHarian.objects.filter(kelas=kelas).exists():
+                print("disini ke run")
                 data_kelas = []
                 data_kelas.append(f"ID Kelas : {kelas.id}")
                 data_kelas.append(f"Nama Kelas : {kelas.namaKelas}")
+                print(data_kelas)
                 kelas_ada_absensi[kelas.id] = (data_kelas)
-
+                print(kelas_ada_absensi)
+            print("disini abis if")
+        print("disini abis for loop")
+        print(kelas_ada_absensi)
         if len(kelas_ada_absensi) == 0:
             return JsonResponse({
                 "status": 200,
