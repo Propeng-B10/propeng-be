@@ -744,7 +744,7 @@ def delete_multiple_kelas(request):
 @permission_classes([IsAuthenticated])
 def get_kelas_with_absensi(request):
     try:
-        semua_kelas = Kelas.objects.filter(isActive=True)
+        semua_kelas = Kelas.objects.all()
         
         if len(semua_kelas) == 0:
             return JsonResponse({
@@ -758,14 +758,13 @@ def get_kelas_with_absensi(request):
                 data_kelas = []
                 data_kelas.append(f"ID Kelas : {kelas.id}")
                 data_kelas.append(f"Nama Kelas : {kelas.namaKelas}")
-                # for j in (kelas.siswa.all()):
-                #     data_kelas.append(f"Siswa Kelas : {j}")
                 kelas_ada_absensi[kelas.id] = (data_kelas)
 
         if len(kelas_ada_absensi) == 0:
             return JsonResponse({
                 "status": 200,
-                "message": f"Tidak terdapat kelas yang memiliki absen"
+                "message": f"Tidak terdapat kelas yang memiliki absen",
+                "kelasYangMemilikiAbsen": kelas_ada_absensi
             }, status=200)
         else:
             return JsonResponse({
