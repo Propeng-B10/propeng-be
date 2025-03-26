@@ -64,7 +64,7 @@ class ChangePasswordView(APIView):
 def list_teacher(request):
     """List all teachers, including both active and deleted"""
     try:
-        teachers = Teacher.objects.all()
+        teachers = Teacher.objects.filter(isDeleted=False)
         teacher_list = []
         
         for teacher in teachers:
@@ -204,7 +204,7 @@ def list_homeroom_teachers(request):
     """List teachers who are assigned as homeroom teachers (have homeroomId)"""
     try:
         # Filter teachers who have a non-null homeroomId
-        teachers = Teacher.objects.filter(homeroomId__isnull=False)
+        teachers = Teacher.objects.filter(homeroomId__isnull=False, isDeleted=False)
         teacher_list = []
         
         for teacher in teachers:
@@ -237,7 +237,7 @@ def list_homeroom_teachers(request):
 def list_student(request):
     """List all students, including both active and deleted"""
     try:
-        students = Student.objects.all()
+        students = Student.objects.filter(isDeleted=False)
         student_list = []
         
         for student in students:
