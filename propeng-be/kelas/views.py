@@ -5,11 +5,18 @@ from kelas.models import Student
 from kelas.models import Teacher
 from tahunajaran.models import TahunAjaran
 import re
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, BasePermission
 from django.db.models import Q  
 from tahunajaran.models import Angkatan
 from absensi.models import *
 
+
+class IsTeacherRole(BasePermission):
+    """
+    only allow users with role 'admin' to access the view.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.role == 'teacher')
 
 '''
 Cek Siswa Tertentu pada Suatu Angkatan
@@ -740,6 +747,36 @@ def delete_multiple_kelas(request):
             "errorMessage": f"Terjadi kesalahan: {str(e)}"
         }, status=500)
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsTeacherRole])
+def get_kode_absensi_kelas(request, kelas_id):
+    try:
+        try:
+            kelas = Kelas.objects.get(id=kelas_id)
+        except Kelas.DoesNotExist:
+            return JsonResponse({"status": 404, "errorMessage": "Kelas tidak ditemukan!"}, status=404)
+        kode= ""
+        
+        if kelas.kode is None or kelas.kode_is_expired():
+            kode = kelas.generate_kode()
+        else:
+            kode = kelas.kode
+        print(kode)
+        print(kelas.kode_expiry_time)
+        kelas.save()
+
+        return JsonResponse({
+            "status": 200,
+            "message": "Kode berhasil didapatkan!",
+            "data": {
+                "id": kelas.id,
+                "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
+                "kode": f"{kelas.kode}" if kelas.kode else kode
+            }
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({"status": 500, "errorMessage": f"Terjadi kesalahan saat membuat Kode kelas: {str(e)}"}, status=500)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

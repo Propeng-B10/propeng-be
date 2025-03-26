@@ -16,5 +16,5 @@ urlpatterns = [
     path('list_available_homeroom/', list_available_homeroom, name='list_available_homeroom'),
     path('list_all_homeroom/', list_all_homeroom, name='list_all_homeroom'),
     path('list_avail_absensi/', get_kelas_with_absensi, name='list_all_ada_absen'),
-    
+    path('kode/<int:kelas_id>/', get_kode_absensi_kelas, name='kode_absens'),
 ]

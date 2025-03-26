@@ -65,4 +65,4 @@ class Kelas(models.Model):
     
     def kode_is_expired(self):
         """Check if the kode absen has expired."""
-        return self.expiry_time and timezone.now() > self.expiry_time
+        return self.kode_expiry_time and timezone.now() > self.kode_expiry_time

@@ -22,11 +22,16 @@ class AbsensiHarian(models.Model):
         return f"Absensi {self.kelas.namaKelas} on {self.date}"
 
     def save(self, *args, **kwargs):
-        studentDiKelas = self.kelas.siswa.all()
-        self.listSiswa = {students.user_id: "Alfa" for students in studentDiKelas}
+        if len(self.listSiswa) == 0:
+            studentDiKelas = self.kelas.siswa.all()
+            self.listSiswa = {students.user_id: "Alfa" for students in studentDiKelas}
         super().save(*args, **kwargs)
     
     def update_absen(self, tipe_absensi, id_siswa):
-        siswa = Student.objects.get(user_id=id_siswa)
-        self.data[siswa.user_id] = tipe_absensi
+        self.listSiswa[id_siswa] = tipe_absensi
+        print(self.kode)
+        print(id_siswa)
+        print(tipe_absensi)
+        print(self.listSiswa)
         self.save()
+        return "Berhasil"
