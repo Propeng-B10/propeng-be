@@ -48,7 +48,10 @@ def absen(request):
         id_kelas = data.get('idKelas')
         id_siswa = data.get('idSiswa')
         kode_absen = data.get('kodeAbsen')
-        
+        print(data)
+        print(id_kelas)
+        print(id_siswa)
+        print(kode_absen)
         if not id_kelas:
             return JsonResponse({
                 "status": 400,
@@ -64,9 +67,9 @@ def absen(request):
                 "status": 400,
                 "errorMessage": "Tidak ada kode absen yang dikirimkan. 'kodeAbsen'"
             }, status=400)
-        
-        # Get all classes to be deleted
-        kelas = Kelas.objects.get(id__in=id_kelas)
+        print("why")
+        # Get all classes to be deleted    
+        kelas = Kelas.objects.get(id=id_kelas)
         student = Student.objects.get(user_id=id_siswa)
         print(kelas)
         print(student)
@@ -80,12 +83,22 @@ def absen(request):
                 "status": 404,
                 "errorMessage": "Kelas tidak ditemukan."
             }, status=404)
+        print("here")
         absensi = AbsensiHarian.objects.get(kelas_id=kelas.id)
-        status = absensi.update_absen("Hadir", id_siswa)
-        print(status)
+        print("this")
+        if kelas.check_kode(kode_absen) == "Berhasil":
+            print("tutor")
+            status = absensi.update_absen("Hadir", id_siswa)
+            print("jkkk")
+        elif kelas.check_kode() == "Gagal":
+            print("disini")
+            return JsonResponse({
+            "status": 400,
+            "message": f"Kode yang kamu submit salah."
+            }, status=200)
         if status!="Berhasil":
             return JsonResponse({
-            "status": 200,
+            "status": 400,
             "message": f"Terdapat permasalahan pada saat mengupdate data atas nama {student.name} untuk kelas {kelas.namaKelas}."
             }, status=200)
         return JsonResponse({

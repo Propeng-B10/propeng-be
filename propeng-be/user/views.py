@@ -14,6 +14,7 @@ from rest_framework import status, generics, serializers
 from .models import Student, Teacher, User
 from kelas.models import Kelas
 from tahunajaran.models import Angkatan
+from absensi.models import *
 import re
 from django.contrib.auth.hashers import make_password
 from django.http import JsonResponse
@@ -114,7 +115,20 @@ def profile(request, id):
         # Add role-specific data
         if user.role == "student":
             student = Student.objects.filter(user=user).first()
-            active_classes = student.siswa.filter(isActive=True, isDeleted=False).values_list('namaKelas', flat=True)
+            try:
+                active_classes = student.siswa.get(isActive=True, isDeleted=False)
+            except :
+                active_classes = None
+            # .values_list('namaKelas', flat=True)
+            print("workss")
+            if active_classes:
+                print("kejalan")
+                print(active_classes)
+                absensi = AbsensiHarian.objects.get(kelas_id=active_classes.id)
+            print("doenst")
+            print(absensi)
+            statusAbsen = absensi.check_absensi(int(user.id))
+            print("works")
             if student:
                 profile_data.update({
                     "name": student.name,
@@ -122,7 +136,9 @@ def profile(request, id):
                     "angkatan": student.angkatan.angkatan if student.angkatan else None,
                     "isActive": student.isActive,
                     "isAssignedtoClass":student.isAssignedtoClass,
-                    "activeClasses": list(active_classes)
+                    "activeClasses": list(active_classes.namaKelas) if active_classes else None,
+                    "classId":active_classes.id if active_classes else None,
+                    "sudahAbsen":statusAbsen
                 })
             else:
                 return Response({
@@ -133,13 +149,22 @@ def profile(request, id):
         elif user.role == "teacher":
             teacher = Teacher.objects.filter(user=user).first()
             homeroom_class = teacher.homeroomId.namaKelas if teacher.homeroomId and not teacher.homeroomId.isDeleted and teacher.homeroomId.isActive else None
+            print(teacher.homeroomId)
+            if homeroom_class:
+                today = timezone.now().date()
+                absensi = AbsensiHarian.objects.get(kelas_id=teacher.homeroomId_id, date=today)
+                print(absensi)
+                print("yes here")
             if teacher:
                 profile_data.update({
                     "name": teacher.name,
                     "nisp": teacher.nisp,
                     "angkatan":teacher.angkatan.angkatan if teacher.angkatan else None,
                     "isActive": user.is_active,
-                    "homeroomClass": homeroom_class
+                    "namaHomeroomClass" :homeroom_class if homeroom_class else None,
+                    "homeroomId" : teacher.homeroomId_id if homeroom_class else None,
+                    # still none, nanti kita tambahin kalo mau hehe
+                    "homeroomAbsensi":None
                 })
             else:
                 return Response({

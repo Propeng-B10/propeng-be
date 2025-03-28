@@ -58,6 +58,8 @@ class Kelas(models.Model):
 
         # Update the kode and expiry time
         self.kode = kode
+        absensi_harian.kode = kode
+        absensi_harian.save()
         self.kode_expiry_time = timezone.now() + timedelta(minutes=5)
         self.save()
 
@@ -66,3 +68,10 @@ class Kelas(models.Model):
     def kode_is_expired(self):
         """Check if the kode absen has expired."""
         return self.kode_expiry_time and timezone.now() > self.kode_expiry_time
+
+    def check_kode(self, kode_absen):
+        print(self.kode)
+        print(kode_absen)
+        if self.kode != kode_absen:
+            return "Gagal"
+        return "Berhasil"

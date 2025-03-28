@@ -278,6 +278,9 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
         waliKelas=kelas_data["waliKelas"],
         angkatan=kelas_data["angkatan"]
     )
+
+    kelas_data["waliKelas"].homeroomId_id = kelas
+    kelas_data["waliKelas"].save()
     
     # Add students to class
     for student in students:

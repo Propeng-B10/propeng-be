@@ -6,7 +6,7 @@ import string
 import random
 
 class AbsensiHarian(models.Model):
-    kode = models.CharField(null=False, unique=True, max_length=6)
+    kode = models.CharField('kel',null=True, unique=True, max_length=6)
     date = models.DateField()
     kelas = models.ForeignKey('kelas.Kelas', related_name="absen_kelas", on_delete=models.CASCADE)
     listSiswa = models.JSONField(default=dict)
@@ -24,7 +24,7 @@ class AbsensiHarian(models.Model):
     def save(self, *args, **kwargs):
         if len(self.listSiswa) == 0:
             studentDiKelas = self.kelas.siswa.all()
-            self.listSiswa = {students.user_id: "Alfa" for students in studentDiKelas}
+            self.listSiswa = {int(students.user_id): "Alfa" for students in studentDiKelas}
         super().save(*args, **kwargs)
     
     def update_absen(self, tipe_absensi, id_siswa):
@@ -34,4 +34,13 @@ class AbsensiHarian(models.Model):
         print(tipe_absensi)
         print(self.listSiswa)
         self.save()
-        return "Berhasil"
+        if self.listSiswa[id_siswa] == tipe_absensi:
+            return "Berhasil"
+        else:
+            return "Gagal"
+    
+    def check_absensi(self, id_siswa):
+        print("here it is")
+        print(self.listSiswa)
+        print(self.listSiswa[str(id_siswa)])
+        return self.listSiswa[str(id_siswa)]
