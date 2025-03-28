@@ -136,7 +136,7 @@ def profile(request, id):
                     "angkatan": student.angkatan.angkatan if student.angkatan else None,
                     "isActive": student.isActive,
                     "isAssignedtoClass":student.isAssignedtoClass,
-                    "activeClasses": list(active_classes.namaKelas) if active_classes else None,
+                    "activeClasses": active_classes.namaKelas if active_classes else None,
                     "classId":active_classes.id if active_classes else None,
                     "sudahAbsen":statusAbsen
                 })
