@@ -24,23 +24,82 @@ class AbsensiHarian(models.Model):
     def save(self, *args, **kwargs):
         if len(self.listSiswa) == 0:
             studentDiKelas = self.kelas.siswa.all()
-            self.listSiswa = {int(students.user_id): "Alfa" for students in studentDiKelas}
+            # Initialize dictionary to store student data
+            student_data = {}
+            
+            # Populate the dictionary with student IDs, names, and default attendance status
+            for student in studentDiKelas:
+                student_data[int(student.user_id)] = {
+                    "name": student.name,
+                    "status": "Alfa",
+                    "id": student.user_id
+                }
+            
+            self.listSiswa = student_data
         super().save(*args, **kwargs)
     
     def update_absen(self, tipe_absensi, id_siswa):
-        self.listSiswa[id_siswa] = tipe_absensi
-        print(self.kode)
-        print(id_siswa)
-        print(tipe_absensi)
-        print(self.listSiswa)
-        self.save()
-        if self.listSiswa[id_siswa] == tipe_absensi:
-            return "Berhasil"
-        else:
+        try:
+            # Check if the ID exists and has the new format
+            if id_siswa in self.listSiswa and isinstance(self.listSiswa[id_siswa], dict):
+                # Update the status in the dictionary
+                self.listSiswa[id_siswa]["status"] = tipe_absensi
+            # If it has the old format (just a string status)
+            elif id_siswa in self.listSiswa:
+                # Get student info
+                try:
+                    student = Student.objects.get(user_id=id_siswa)
+                    name = student.name
+                except:
+                    name = "Unknown"
+                
+                # Convert to new format
+                self.listSiswa[id_siswa] = {
+                    "name": name,
+                    "status": tipe_absensi
+                }
+            # If ID doesn't exist yet
+            else:
+                try:
+                    student = Student.objects.get(user_id=id_siswa)
+                    name = student.name
+                except:
+                    name = "Unknown"
+                
+                self.listSiswa[id_siswa] = {
+                    "name": name,
+                    "status": tipe_absensi
+                }
+            
+            self.save()
+            
+            # Check if update was successful
+            if id_siswa in self.listSiswa and (
+                (isinstance(self.listSiswa[id_siswa], dict) and self.listSiswa[id_siswa]["status"] == tipe_absensi) or
+                (isinstance(self.listSiswa[id_siswa], str) and self.listSiswa[id_siswa] == tipe_absensi)
+            ):
+                return "Berhasil"
+            else:
+                return "Gagal"
+        except Exception as e:
+            print(f"Error updating absensi: {str(e)}")
             return "Gagal"
     
     def check_absensi(self, id_siswa):
+        id_siswa_str = str(id_siswa)
         print("here it is")
         print(self.listSiswa)
-        print(self.listSiswa[str(id_siswa)])
-        return self.listSiswa[str(id_siswa)]
+        
+        # Handle both old and new format
+        if id_siswa_str in self.listSiswa:
+            if isinstance(self.listSiswa[id_siswa_str], dict):
+                return self.listSiswa[id_siswa_str]["status"]
+            else:
+                return self.listSiswa[id_siswa_str]
+        elif id_siswa in self.listSiswa:
+            if isinstance(self.listSiswa[id_siswa], dict):
+                return self.listSiswa[id_siswa]["status"]
+            else:
+                return self.listSiswa[id_siswa]
+        
+        return "Not found"

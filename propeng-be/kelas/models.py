@@ -71,6 +71,7 @@ class Kelas(models.Model):
 
     def check_kode(self, kode_absen):
         print(self.kode)
+        print("disisni")
         print(kode_absen)
         if self.kode != kode_absen:
             return "Gagal"
