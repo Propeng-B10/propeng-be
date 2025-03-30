@@ -151,15 +151,6 @@ def profile(request, id):
             teacher = Teacher.objects.filter(user=user).first()
             homeroom_class = teacher.homeroomId.namaKelas if teacher.homeroomId and not teacher.homeroomId.isDeleted and teacher.homeroomId.isActive else None
             print(teacher.homeroomId)
-            # if homeroom_class:
-            #     print("this")
-            #     today = timezone.now().date()
-            #     try:
-            #         absensi = AbsensiHarian.objects.get(kelas_id=teacher.homeroomId_id, date=today)
-            #     except Exception as error:
-            #         print(error)
-            #     print(absensi)
-            #     print("yes here")
             if teacher:
                 profile_data.update({
                     "name": teacher.name,
@@ -169,14 +160,64 @@ def profile(request, id):
                     "namaHomeroomClass" :homeroom_class if homeroom_class else None,
                     "homeroomId" : teacher.homeroomId_id if homeroom_class else None,
                     # still none, nanti kita tambahin kalo mau hehe
-                    "homeroomAbsensi":None
                 })
+            print("here")
+            if homeroom_class:
+                teacher_classes = Kelas.objects.filter(
+                    waliKelas=teacher,
+                    isActive=True,
+                    isDeleted=False
+                ).order_by('-updatedAt')
+                for k in teacher_classes:
+                    # Get the total count of students
+                    total_students = k.siswa.count()
+                    
+                    # Initialize attendance counters
+                    total_alfa = 0
+                    total_hadir = 0
+                    total_sakit = 0
+                    total_izin = 0
+                    print("theree")
+                    # Get the most recent absensi record for this class if it exists
+                    latest_absensi = AbsensiHarian.objects.filter(kelas=k).order_by('-date').first()
+                    print("thisss")
+                    if latest_absensi:
+                        total_alfa = 0
+                        total_hadir = 0
+                        total_sakit = 0
+                        total_izin = 0
+                        # Count attendance statuses
+                        for student_id, data in latest_absensi.listSiswa.items():
+                            if isinstance(data, dict):
+                                status1 = data.get("status", "")
+                            else:
+                                status1 = data
+
+                            print(status1)
+                            if status1 == "Alfa":
+                                total_alfa += 1
+                            elif status1 == "Hadir":
+                                total_hadir += 1
+                            elif status1 == "Sakit":
+                                total_sakit += 1
+                            elif status1 == "Izin":
+                                total_izin += 1
+                        print("it gets here")
+                        profile_data.update({
+                            "totalSiswa": total_students,
+                            "absensiStats": {
+                                "totalAlfa": total_alfa,
+                                "totalHadir": total_hadir,
+                                "totalSakit": total_sakit,
+                                "totalIzin": total_izin
+                            },
+                        })          
+                        print(profile_data)    
             else:
                 return Response({
                     "status": 404,
                     "message": "Teacher profile not found"
-                }, status=status.HTTP_404_NOT_FOUND)
-                
+                }, status=status.HTTP_404_NOT_FOUND)  
         return Response({
             "status": 200,
             "message": "Successfully retrieved user profile",
