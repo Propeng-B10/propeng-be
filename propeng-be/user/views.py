@@ -147,14 +147,19 @@ def profile(request, id):
                 }, status=status.HTTP_404_NOT_FOUND)
                 
         elif user.role == "teacher":
+            print("works")
             teacher = Teacher.objects.filter(user=user).first()
             homeroom_class = teacher.homeroomId.namaKelas if teacher.homeroomId and not teacher.homeroomId.isDeleted and teacher.homeroomId.isActive else None
             print(teacher.homeroomId)
-            if homeroom_class:
-                today = timezone.now().date()
-                absensi = AbsensiHarian.objects.get(kelas_id=teacher.homeroomId_id, date=today)
-                print(absensi)
-                print("yes here")
+            # if homeroom_class:
+            #     print("this")
+            #     today = timezone.now().date()
+            #     try:
+            #         absensi = AbsensiHarian.objects.get(kelas_id=teacher.homeroomId_id, date=today)
+            #     except Exception as error:
+            #         print(error)
+            #     print(absensi)
+            #     print("yes here")
             if teacher:
                 profile_data.update({
                     "name": teacher.name,
