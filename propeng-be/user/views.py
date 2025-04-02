@@ -20,6 +20,7 @@ from django.contrib.auth.hashers import make_password
 from django.http import JsonResponse
 import json
 import logging
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -124,10 +125,12 @@ def profile(request, id):
             if active_classes:
                 print("kejalan")
                 print(active_classes)
-                absensi = AbsensiHarian.objects.get(kelas_id=active_classes.id)
+                today = timezone.now().date()
+                absensi = AbsensiHarian.objects.filter(kelas_id=active_classes.id, date=today).first()
+                if absensi:
+                    statusAbsen = absensi.check_absensi(int(user.id))
             print("doenst")
             print(absensi)
-            statusAbsen = absensi.check_absensi(int(user.id))
             print("works")
             if student:
                 profile_data.update({
@@ -138,7 +141,7 @@ def profile(request, id):
                     "isAssignedtoClass":student.isAssignedtoClass,
                     "activeClasses": active_classes.namaKelas if active_classes else None,
                     "classId":active_classes.id if active_classes else None,
-                    "sudahAbsen":statusAbsen
+                    "sudahAbsen":statusAbsen if statusAbsen else None
                 })
             else:
                 return Response({
