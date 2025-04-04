@@ -121,7 +121,9 @@ def absen(request):
                 "errorMessage": "Kelas tidak ditemukan."
             }, status=404)
         print("here")
-        absensi = AbsensiHarian.objects.get(kelas_id=kelas.id)
+        print(timezone.now().date())
+        print(AbsensiHarian.objects.filter(kelas=kelas.id, date=timezone.now().date()))
+        absensi = AbsensiHarian.objects.get(kelas=kelas.id, date=timezone.now().date())
         print("this")
         if kelas.check_kode(kode_absen) == "Berhasil":
             print("tutor")
@@ -242,8 +244,6 @@ def absensi_kelas_table(request, kelas_id):
 @permission_classes([IsAuthenticated])
 def update_student_absensi(request):
     """
-    Update a student's attendance status for a specific date
-    Expects a body with:
     {
       "id": ID of the student,
       "status": Status ("Hadir", "Sakit", "Izin", or "Alfa"),
@@ -255,8 +255,6 @@ def update_student_absensi(request):
         student_id = data.get('id')
         status = data.get('status')
         absensi_date = data.get('absensiDate')
-        
-        # Validate required fields
         if not student_id:
             return JsonResponse({
                 "status": 400,
@@ -274,16 +272,12 @@ def update_student_absensi(request):
                 "status": 400,
                 "errorMessage": "Tanggal absensi diperlukan"
             }, status=400)
-            
-        # Validate status value
         valid_statuses = ["Hadir", "Sakit", "Izin", "Alfa"]
         if status not in valid_statuses:
             return JsonResponse({
                 "status": 400,
                 "errorMessage": f"Status tidak valid. Gunakan salah satu dari: {', '.join(valid_statuses)}"
             }, status=400)
-            
-        # Check if student exists
         try:
             student = Student.objects.get(user_id=student_id)
         except Student.DoesNotExist:
@@ -299,24 +293,19 @@ def update_student_absensi(request):
                 "status": 404,
                 "errorMessage": f"Siswa dengan ID {student_id} tidak terdaftar di kelas aktif manapun"
             }, status=404)
-            
-        # Find attendance record for this date and class
         try:
-            # Format date string to date object if it's a string
             if isinstance(absensi_date, str):
                 from datetime import datetime
                 absensi_date = datetime.strptime(absensi_date, '%Y-%m-%d').date()
                 
-            # Get the absensi record
             absensi = AbsensiHarian.objects.get(date=absensi_date, kelas=student_classes.first())
             
-            # Update the student's attendance status
             student_id_str = str(student_id)
             
-            # Handle both old and new format
             if student_id_str in absensi.listSiswa:
                 if isinstance(absensi.listSiswa[student_id_str], dict):
                     absensi.listSiswa[student_id_str]["status"] = status
+                    absensi.listSiswa[student_id]["id"] = student_id
                 else:
                     # Convert to new format
                     absensi.listSiswa[student_id_str] = {
@@ -324,25 +313,23 @@ def update_student_absensi(request):
                         "status": status,
                         "id": student_id
                     }
-            # Handle int key
             elif student_id in absensi.listSiswa:
                 if isinstance(absensi.listSiswa[student_id], dict):
+                    print("works here")
                     absensi.listSiswa[student_id]["status"] = status
+                    absensi.listSiswa[student_id]["id"] = student_id
                 else:
-                    # Convert to new format
                     absensi.listSiswa[student_id] = {
                         "name": student.name,
                         "status": status,
                         "id": student_id
                     }
             else:
-                # Student not found in the attendance record
                 return JsonResponse({
                     "status": 404,
                     "errorMessage": f"Siswa dengan ID {student_id} tidak ditemukan dalam catatan absensi tanggal {absensi_date}"
                 }, status=404)
                 
-            # Save the changes
             absensi.save()
             
             return JsonResponse({

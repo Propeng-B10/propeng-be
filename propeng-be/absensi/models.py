@@ -29,7 +29,7 @@ class AbsensiHarian(models.Model):
             
             # Populate the dictionary with student IDs, names, and default attendance status
             for student in studentDiKelas:
-                student_data[int(student.user_id)] = {
+                student_data[student.user_id] = {
                     "name": student.name,
                     "status": "Alfa",
                     "id": student.user_id
@@ -41,12 +41,15 @@ class AbsensiHarian(models.Model):
     def update_absen(self, tipe_absensi, id_siswa):
         try:
             # Check if the ID exists and has the new format
+            print("DISINI YES")
+            print(self.listSiswa)
             if id_siswa in self.listSiswa and isinstance(self.listSiswa[id_siswa], dict):
                 # Update the status in the dictionary
                 self.listSiswa[id_siswa]["status"] = tipe_absensi
+                print("ini yg jkejalan")
             # If it has the old format (just a string status)
             elif id_siswa in self.listSiswa:
-                # Get student info
+                print("Disini yg kejal;an")                # Get student info
                 try:
                     student = Student.objects.get(user_id=id_siswa)
                     name = student.name
@@ -56,7 +59,8 @@ class AbsensiHarian(models.Model):
                 # Convert to new format
                 self.listSiswa[id_siswa] = {
                     "name": name,
-                    "status": tipe_absensi
+                    "status": tipe_absensi,
+                    "id":id_siswa
                 }
             # If ID doesn't exist yet
             else:
@@ -68,16 +72,21 @@ class AbsensiHarian(models.Model):
                 
                 self.listSiswa[id_siswa] = {
                     "name": name,
-                    "status": tipe_absensi
+                    "status": tipe_absensi,
+                    "id" : id_siswa
                 }
+            print("udah disisni")
+            print(self.listSiswa)
             
             self.save()
-            
+            print(self.date)
+            print(self.listSiswa)
             # Check if update was successful
             if id_siswa in self.listSiswa and (
                 (isinstance(self.listSiswa[id_siswa], dict) and self.listSiswa[id_siswa]["status"] == tipe_absensi) or
                 (isinstance(self.listSiswa[id_siswa], str) and self.listSiswa[id_siswa] == tipe_absensi)
             ):
+                print("berhasil kok")
                 return "Berhasil"
             else:
                 return "Gagal"
