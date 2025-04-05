@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     'absensi',
     'kelas',
     'tahunajaran',
+    'komponenpenilaian',
     "corsheaders",
     "rest_framework",
 

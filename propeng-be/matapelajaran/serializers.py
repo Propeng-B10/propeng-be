@@ -17,6 +17,14 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
         model = MataPelajaran
         fields = ['id', 'kategoriMatpel', 'nama', 'kode', 'angkatan','tahunAjaran', 'teacher', 'siswa_terdaftar', 'status']
         read_only_fields = ['kode']
+    
+    def __init__(self, *args, **kwargs):
+        super(MataPelajaranSerializer, self).__init__(*args, **kwargs)
+        
+        if self.instance:
+            optional_fields = ['kategoriMatpel', 'angkatan', 'tahunAjaran']
+            for field in optional_fields:
+                self.fields[field].required = False
 
     def get_status(self, obj):
         return "Active" if obj.isActive else "Inactive"
@@ -57,23 +65,25 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """
-        Process TahunAjaran data and validate unique name.
+        Process TahunAjaran and Angkatan only if provided.
         """
-        # Get or create TahunAjaran
-        print("cokkk here")
-        print(data)
-        tahun = data.get('tahunAjaran')
-        angkatann = data.get("angkatan")
-        try:
-            tahun_ajaranobj, created = TahunAjaran.objects.get_or_create(tahunAjaran=tahun)
-            data['tahunAjaran_instance'] = tahun_ajaranobj
-        except Exception as e:
-            raise serializers.ValidationError(f"Error with TahunAjaran: {str(e)}")
-        try :
-            angkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatann)
-            data["angkatan_instance"] = angkatanObj
-        except Exception as e:
-            raise serializers.ValidationError(f"Error with Angkatan: {str(e)}")
+        tahun = data.get('tahunAjaran', None)
+        angkatann = data.get("angkatan", None)
+
+        if tahun is not None:
+            try:
+                tahun_ajaranobj, _ = TahunAjaran.objects.get_or_create(tahunAjaran=tahun)
+                data['tahunAjaran_instance'] = tahun_ajaranobj
+            except Exception as e:
+                raise serializers.ValidationError(f"Error with TahunAjaran: {str(e)}")
+
+        if angkatann is not None:
+            try:
+                angkatanObj, _ = Angkatan.objects.get_or_create(angkatan=angkatann)
+                data["angkatan_instance"] = angkatanObj
+            except Exception as e:
+                raise serializers.ValidationError(f"Error with Angkatan: {str(e)}")
+
         return data
 
     def create(self, validated_data):
@@ -142,7 +152,8 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
             representation['siswa_terdaftar'].append({
                 'id': student.user_id,
                 'name': student.name,
-                'username': student.username
+                'username': student.username,
+                'nisn': student.nisn
             })
         
         # Add tahunAjaran details
@@ -159,67 +170,35 @@ class MataPelajaranSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         """
-        Update a MataPelajaran with proper handling of relationships.
+        Update only the 'nama', 'teacher', and 'siswa_terdaftar' fields of MataPelajaran.
         """
-        # Extract related objects if present
-        print(validated_data)
-        tahun_ajaran_instance = None
-        if 'tahunAjaran_instance' in validated_data:
-            tahun_ajaran_instance = validated_data.pop('tahunAjaran_instance')
-        if 'angkatan_instance' in validated_data:
-            angkatan_instance_lagi = validated_data.pop('angkatan_instance')
-        
-        teacher_user = validated_data.pop('teacher', None)
-        students_users = validated_data.pop('siswa_terdaftar', None)
-        # deleted again....
-        for i, z in validated_data.items():
-            print(f'ini i : {i} kalo ini z : {z}')
-            instance.i = z
-        if 'kategoriMatpel' in validated_data:
-            instance.kategoriMatpel = validated_data["kategoriMatpel"]
+        # Update name
         if 'nama' in validated_data:
-            instance.nama = validated_data["nama"]
-        print("disisni deh")
-        print(validated_data)
-        if 'status' in validated_data:
-            print("status")
-            if validated_data["status"] == True:
-                instance.isActive = True
-            if validated_data["status"] == False:
-                instance.isActive = False
-        if 'kategoriMatpel' in validated_data:
-            instance.kategoriMatpel = validated_data["kategoriMatpel"]
-        # Update tahunAjaran if provided
-        if tahun_ajaran_instance:
-            instance.tahunAjaran = tahun_ajaran_instance
-        if angkatan_instance_lagi:
-            instance.angkatan = angkatan_instance_lagi
-        
-        # Save the instance with updated fields
-        instance.save()
-        
-        # Update teacher if provided
+            instance.nama = validated_data['nama']
+
+        # Update teacher
+        teacher_user = validated_data.pop('teacher', None)
         if teacher_user:
-            teacher_field = MataPelajaran._meta.get_field('teacher')
-            column_name = teacher_field.column
-            MataPelajaran.objects.filter(id=instance.id).update(**{column_name: teacher_user.id})
-            instance.refresh_from_db()
-        
+            try:
+                teacher = Teacher.objects.get(user=teacher_user)
+                instance.teacher = teacher
+            except Teacher.DoesNotExist:
+                raise serializers.ValidationError(f"No Teacher found for User ID {teacher_user.id}")
+
+        # Save the instance with the updated basic fields
+        instance.save()
+
         # Update students if provided
-        if students_users is not None:  # Check for None to distinguish from empty list
-            # Clear existing students
-            instance.siswa_terdaftar.clear()
-            
-            # Add new students
+        students_users = validated_data.pop('siswa_terdaftar', None)
+        if students_users is not None:
+            student_instances = []
             for user in students_users:
                 try:
-                    student = Student.objects.get(user_id=user.id)
-                    instance.siswa_terdaftar.add(student)
-                except Exception as e:
-                    # Log the error but continue with other students
-                    print(f"Error adding student {user.id}: {str(e)}")
-        
-        # Refresh from database
-        instance.refresh_from_db()
-        
+                    student = Student.objects.get(user=user)
+                    student_instances.append(student)
+                except Student.DoesNotExist:
+                    raise serializers.ValidationError(f"No Student found for User ID {user.id}")
+            
+            instance.siswa_terdaftar.set(student_instances)
+
         return instance

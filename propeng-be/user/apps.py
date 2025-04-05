@@ -18,7 +18,7 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
         )
         print("Admin user 'adminNext' created successfully!")
     else:
-        User.objects.filter(username="adminNext").delete()
+        User.objects.filter(username="adminnext").delete()
         print("Deleting user 'adminNext' created successfully!")
         User.objects.create(
             username='adminnext',
