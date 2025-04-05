@@ -2,8 +2,24 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.request import Request
 from .models import Nilai
 from .serializers import NilaiSerializer
+import json
+from decimal import Decimal, InvalidOperation
+import traceback
+from matapelajaran.models import MataPelajaran
+from komponenpenilaian.models import KomponenPenilaian
+from user.models import Teacher, Student, User
+from kelas.models import Kelas
+import json
+from decimal import Decimal, InvalidOperation
+import traceback
+from matapelajaran.models import MataPelajaran
+from komponenpenilaian.models import KomponenPenilaian
+from user.models import Teacher, Student, User
+from nilai.models import Nilai
+from kelas.models import Kelas
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -99,249 +115,163 @@ def update_nilai(request, nilai_id):
             "error": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# api/views.py
 
-from django.http import JsonResponse, HttpRequest
-from django.views.decorators.http import require_http_methods, require_GET, require_POST
-from django.views.decorators.csrf import csrf_exempt # Hanya untuk testing/API stateless
-import json
-from decimal import Decimal, InvalidOperation
 
-# Impor model Anda (sesuaikan path jika perlu)
-from matapelajaran.models import MataPelajaran
-from komponenpenilaian.models import KomponenPenilaian
-from user.models import Student, Teacher # Asumsi Student & Teacher ada di app 'user'
-from nilai.models import Nilai # Model Nilai yang diberikan
-from kelas.models import Kelas # Untuk mendapatkan nama kelas siswa
+# Helper function
+def drf_error_response(message, http_status=status.HTTP_400_BAD_REQUEST):
+    return Response({'message': message, 'error': True}, status=http_status)
 
-# Helper function untuk error response
-def error_response(message, status=400):
-    return JsonResponse({'message': message, 'error': True}, status=status)
-
-# --- View untuk /api/subjects/<matapelajaran_id>/gradedata/ ---
-@csrf_exempt # Hapus jika menggunakan autentikasi session/token yang proper
-@require_http_methods(["GET", "POST"])
-def grade_data_view(request: HttpRequest, matapelajaran_id: int):
+# --- View grade_data_view (Sesuai Model Nilai Ideal) ---
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def grade_data_view(request: Request, matapelajaran_id: int):
     """
-    Handles GET and POST requests for grade data of a specific MataPelajaran.
-    GET: Returns student list, assessment components, subject name, and initial grades.
-    POST: Saves or updates a student's grade for the MataPelajaran.
-          NOTE: Due to the provided Nilai model structure, only one grade per
-                student per MataPelajaran can be saved, not per component.
+    Handles GET/POST for grade data using the CORRECTED Nilai model.
+    GET: Returns per-component grades accurately.
+    POST: Saves/Updates grade for a specific student and component.
     """
-    try:
-        matapelajaran = MataPelajaran.objects.prefetch_related(
-            'siswa_terdaftar', # Prefetch students registered to the subject
-            'komponenpenilaian_matpel' # Prefetch assessment components
-        ).get(id=matapelajaran_id, isDeleted=False, isActive=True)
-    except MataPelajaran.DoesNotExist:
-        return error_response(f"Mata Pelajaran dengan ID {matapelajaran_id} tidak ditemukan atau tidak aktif.", status=404)
-    except Exception as e:
-         print(f"[API Error] Error fetching MataPelajaran: {e}")
-         return error_response("Terjadi kesalahan saat mengambil data mata pelajaran.", status=500)
+    # --- Dapatkan profil Guru & MataPelajaran, Cek Permission (SAMA) ---
+    try: requesting_teacher = request.user.teacher
+    except (Teacher.DoesNotExist, AttributeError): return drf_error_response("Akses ditolak.", status.HTTP_403_FORBIDDEN)
+    try: matapelajaran = MataPelajaran.objects.select_related('teacher__user', 'tahunAjaran').prefetch_related('siswa_terdaftar', 'komponenpenilaian_matpel').get(id=matapelajaran_id, isDeleted=False, isActive=True)
+    except MataPelajaran.DoesNotExist: return drf_error_response(f"MatPel tidak ditemukan.", status.HTTP_404_NOT_FOUND)
+    if matapelajaran.teacher and matapelajaran.teacher != requesting_teacher: return drf_error_response("Tidak ada izin.", status.HTTP_403_FORBIDDEN)
 
-    # --- Handler GET ---
+    # ==========================
+    # --- Handle GET Request ---
+    # ==========================
     if request.method == 'GET':
         try:
-            # 1. Ambil daftar siswa
-            students_queryset = matapelajaran.siswa_terdaftar.filter(isDeleted=False, isActive=True).select_related('kelas') # Ambil data kelas siswa
-            students_list = []
-            for student_profile in students_queryset:
-                # Cari kelas tempat siswa terdaftar
-                # Model Student tidak secara langsung link ke Kelas tunggal, tapi Kelas punya M2M ke Student
-                # Cara paling mudah adalah mencari kelas yang mengandung siswa ini
-                kelas_siswa = Kelas.objects.filter(siswa=student_profile).first() # Ambil kelas pertama yg cocok
-                students_list.append({
-                    "id": str(student_profile.user_id), # Gunakan ID dari User model
-                    "name": student_profile.name or student_profile.user.username,
-                    "class": kelas_siswa.namaKelas if kelas_siswa else "N/A" # Ambil nama kelas
-                })
+            # Ambil siswa & komponen (SAMA)
+            students_queryset = matapelajaran.siswa_terdaftar.filter(isDeleted=False, isActive=True); students_list = []
+            for sp in students_queryset: k = Kelas.objects.filter(siswa=sp).first(); students_list.append({"id": str(sp.user_id), "name": sp.name or sp.user.username, "class": k.namaKelas if k else "N/A"})
+            assessment_components_qs = matapelajaran.komponenpenilaian_matpel.all(); assessment_components_formatted = [{'id': str(c.id), 'name': c.namaKomponen, 'weight': c.bobotKomponen} for c in assessment_components_qs]
 
-            # 2. Ambil komponen penilaian
-            assessment_components = list(matapelajaran.komponenpenilaian_matpel.values(
-                'id', 'namaKomponen', 'bobotKomponen'
-            ))
-            # Ubah nama field agar sesuai dengan frontend (jika perlu)
-            assessment_components_formatted = [
-                {'id': str(comp['id']), 'name': comp['namaKomponen'], 'weight': comp['bobotKomponen']}
-                for comp in assessment_components
-            ]
-
-            # 3. Siapkan initialGrades
-            # !! PERHATIAN !!: Model Nilai yang diberikan hanya menyimpan SATU nilai
-            # per siswa per matapelajaran, BUKAN per komponen.
-            # Oleh karena itu, kita tidak bisa mengisi initialGrades per komponen secara akurat.
-            # Kita akan kembalikan struktur yang diharapkan frontend, tapi isinya null.
+            # --- Ambil initialGrades (Logika Benar untuk Model Baru) ---
             initial_grades = {}
-            # Ambil semua nilai yang ada untuk matapelajaran ini
-            existing_nilai = Nilai.objects.filter(
-                matapelajaran=matapelajaran,
-                student_id__in=[s['id'] for s in students_list] # Filter by student user_ids
-            ).values('student_id', 'nilai') # Ambil student_id dan nilai
+            if students_list and assessment_components_formatted:
+                student_user_ids_str = [s['id'] for s in students_list]; component_ids = [comp.id for comp in assessment_components_qs]
+                # Ambil record Nilai yang relevan
+                nilai_records = Nilai.objects.filter(student_id__in=student_user_ids_str, komponen_id__in=component_ids).values('student_id', 'komponen_id', 'nilai')
+                # Buat map untuk lookup cepat
+                grades_map = {}
+                for record in nilai_records:
+                    sid = str(record['student_id']); cid = str(record['komponen_id']); score = record['nilai']; score_fl = float(score) if score is not None else None
+                    if sid not in grades_map: grades_map[sid] = {}
+                    grades_map[sid][cid] = score_fl
+                # Isi initialGrades dari map
+                for sd in students_list:
+                    sid = sd['id']; initial_grades[sid] = {}
+                    for comp in assessment_components_formatted: cid = comp['id']; initial_grades[sid][cid] = grades_map.get(sid, {}).get(cid, None) # Default null jika tidak ada
+            else: # Buat struktur kosong jika tidak ada siswa/komponen
+                 for sd in students_list: initial_grades[sd['id']] = {comp['id']: None for comp in assessment_components_formatted}
+            # --- AKHIR initialGrades ---
 
-            # Buat mapping student_id -> nilai (nilai tunggal dari model Nilai)
-            student_overall_grade_map = {str(n['student_id']): n['nilai'] for n in existing_nilai}
+            response_data = {"students": students_list, "assessmentComponents": assessment_components_formatted, "subjectName": matapelajaran.nama, "initialGrades": initial_grades}
+            return Response(response_data, status=status.HTTP_200_OK) # Gunakan Response DRF
 
-            for student_data in students_list:
-                student_id = student_data['id']
-                initial_grades[student_id] = {}
-                 # Isi semua komponen dengan null karena model tidak mendukung nilai per komponen
-                for comp in assessment_components_formatted:
-                    initial_grades[student_id][comp['id']] = None # Default ke null
-                # Jika Anda ingin menampilkan nilai tunggal dari model Nilai di *setiap* komponen (kurang ideal):
-                # overall_grade = student_overall_grade_map.get(student_id)
-                # for comp in assessment_components_formatted:
-                #     initial_grades[student_id][comp['id']] = float(overall_grade) if overall_grade is not None else None
+        except Exception as e: print(f"...Error GET: {e}"); traceback.print_exc(); return drf_error_response("Error internal GET.", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-            # 4. Siapkan data respons
-            response_data = {
-                "students": students_list,
-                "assessmentComponents": assessment_components_formatted,
-                "subjectName": matapelajaran.nama,
-                "initialGrades": initial_grades
-            }
-            print(f"[API GET /api/subjects/{matapelajaran_id}/gradedata] Data dikirim.")
-            return JsonResponse(response_data, status=200)
-
-        except Exception as e:
-            print(f"[API GET /api/subjects/{matapelajaran_id}/gradedata] Error: {e}")
-            return error_response("Terjadi kesalahan internal saat memproses data.", status=500)
-
-    # --- Handler POST ---
+    # ===========================
+    # --- Handle POST Request ---
+    # ===========================
     elif request.method == 'POST':
         try:
-            # 1. Parse body JSON
-            try:
-                data = json.loads(request.body)
-                student_user_id = data.get('studentId')
-                component_id = data.get('componentId') # Komponen ID diterima dari frontend
-                score_input = data.get('score') # Bisa null, string, atau number
-            except json.JSONDecodeError:
-                return error_response("Format JSON pada body request tidak valid.", status=400)
+            # Parsing & Validasi Input (SAMA)
+            data = request.data; student_user_id = data.get('studentId'); component_id = data.get('componentId'); score_input = data.get('score')
+            if not all(k in data for k in ['studentId', 'componentId', 'score']) or not student_user_id or not component_id: return drf_error_response("Data tidak lengkap.", status.HTTP_400_BAD_REQUEST)
 
-            # 2. Validasi input dasar
-            if student_user_id is None or component_id is None or score_input is None:
-                return error_response("Data tidak lengkap (membutuhkan studentId, componentId, score).", status=400)
-
-            # 3. Konversi dan validasi score
+            # Konversi & Validasi Score (SAMA)
             final_score = None
-            if score_input is not None and score_input != '':
-                try:
-                    numeric_score = Decimal(str(score_input)) # Konversi ke Decimal
-                    if not (0 <= numeric_score <= 100):
-                        return error_response("Nilai tidak valid. Harus angka antara 0-100 atau kosong/null.", status=400)
-                    final_score = numeric_score
-                except (ValueError, TypeError, InvalidOperation):
-                     return error_response("Format nilai tidak valid. Harus berupa angka.", status=400)
+            if score_input is not None and str(score_input).strip() != '':
+                try: numeric_score = Decimal(str(score_input)); assert 0 <= numeric_score <= 100; final_score = numeric_score
+                except: return drf_error_response(f"Skor tidak valid.", status.HTTP_400_BAD_REQUEST)
 
-            # 4. Validasi Siswa dan Komponen
-            try:
-                # Cari student berdasarkan user_id
-                student = Student.objects.get(user_id=student_user_id)
-                # Cek apakah siswa terdaftar di matapelajaran ini
-                if not matapelajaran.siswa_terdaftar.filter(user_id=student_user_id).exists():
-                     return error_response(f"Siswa dengan ID {student_user_id} tidak terdaftar di mata pelajaran ini.", status=400)
-            except Student.DoesNotExist:
-                 return error_response(f"Siswa dengan ID {student_user_id} tidak ditemukan.", status=404)
+            # Validasi Siswa (ambil User object - SAMA)
+            try: student_profile = Student.objects.select_related('user').get(user_id=str(student_user_id)); student_user = student_profile.user
+            except Student.DoesNotExist: return drf_error_response(f"Siswa tidak ditemukan.", status.HTTP_404_NOT_FOUND)
+            if not matapelajaran.siswa_terdaftar.filter(user_id=student_user.id).exists(): return drf_error_response(f"Siswa tidak terdaftar.", status.HTTP_400_BAD_REQUEST)
 
-            try:
-                # Cek apakah komponen ada di matapelajaran ini
-                 komponen = KomponenPenilaian.objects.get(id=component_id, mataPelajaran=matapelajaran)
-            except KomponenPenilaian.DoesNotExist:
-                 return error_response(f"Komponen Penilaian dengan ID {component_id} tidak valid untuk mata pelajaran ini.", status=400)
+            # Validasi Komponen (SAMA)
+            try: komponen = KomponenPenilaian.objects.get(id=str(component_id), mataPelajaran=matapelajaran)
+            except KomponenPenilaian.DoesNotExist: return drf_error_response(f"Komponen tidak valid.", status.HTTP_400_BAD_REQUEST)
 
-            # 5. Simpan/Update Nilai
-            # !! PERHATIAN !!: Karena model Nilai hanya punya satu field `nilai` per siswa
-            # per matapelajaran, kita akan mengupdate record Nilai tunggal ini.
-            # Informasi `componentId` dari frontend TIDAK dapat digunakan secara efektif
-            # untuk menyimpan nilai per komponen dengan model ini.
-            # Kode berikut akan membuat atau memperbarui SATU record Nilai untuk siswa dan matpel ini.
+            # --- Simpan/Update Nilai (Logika Benar untuk Model Baru) ---
             try:
+                # update_or_create berdasarkan student (User) dan komponen
                 nilai_obj, created = Nilai.objects.update_or_create(
-                    matapelajaran=matapelajaran,
-                    student=student, # Gunakan instance Student
-                    defaults={'nilai': final_score} # Update nilai
+                    student=student_user,   # Kunci 1: Object User
+                    komponen=komponen,    # Kunci 2: Object KomponenPenilaian
+                    defaults={'nilai': final_score} # Update field nilai
                 )
                 action = "dibuat" if created else "diperbarui"
-                print(f"[API POST /api/subjects/{matapelajaran_id}/gradedata] Nilai {action}: Siswa={student_user_id}, Matpel={matapelajaran_id}, Nilai={final_score}")
-                return JsonResponse({
-                    "message": f"Nilai berhasil {action} (in-memory) untuk kelas {matapelajaran.nama}.",
-                    "studentId": student_user_id,
-                    # 'componentId': component_id, # Mungkin tidak relevan dikembalikan jika tidak disimpan per komponen
+                return Response({ # Gunakan Response DRF
+                    "message": f"Nilai untuk komponen '{komponen.namaKomponen}' berhasil {action}.",
+                    "studentId": str(student_user_id),
+                    "componentId": str(component_id), # Kembalikan componentId
                     'savedScore': float(final_score) if final_score is not None else None
-                }, status=200)
+                }, status=status.HTTP_200_OK)
+            # --- AKHIR Simpan ---
+            except Exception as e: print(f"...Error saving Nilai: {e}"); return drf_error_response("Gagal menyimpan nilai.", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            except Exception as e:
-                 print(f"[API POST /api/subjects/{matapelajaran_id}/gradedata] Error saving Nilai: {e}")
-                 return error_response("Gagal menyimpan nilai ke database.", status=500)
+        except Exception as e: print(f"...Error POST: {e}"); traceback.print_exc(); return drf_error_response("Error internal POST.", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        except Exception as e:
-            print(f"[API POST /api/subjects/{matapelajaran_id}/gradedata] Error: {e}")
-            return error_response("Terjadi kesalahan internal saat menyimpan nilai.", status=500)
+# Helper function
+def drf_error_response(message, http_status=status.HTTP_400_BAD_REQUEST): # <-- Menggunakan modul status
+    return Response({'message': message, 'error': True}, status=http_status)
 
-# --- View untuk /api/guru/mata-pelajaran/ ---
-@require_GET
-def get_teacher_subjects_summary(request: HttpRequest):
-    """
-    Returns a summary list of all active MataPelajaran.
-    NOTE: Status calculation is based on the provided Nilai model (one grade per student per subject).
-    """
-    print("[API GET /api/guru/mata-pelajaran] Fetching subject list summary...")
+
+# --- View get_teacher_subjects_summary (Variabel diganti) ---
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_teacher_subjects_summary(request: Request):
+    # ... (Logika get teacher SAMA) ...
+    try: logged_in_teacher = request.user.teacher
+    except (Teacher.DoesNotExist, AttributeError): return drf_error_response("Akses ditolak.", status=status.HTTP_403_FORBIDDEN) # <-- Menggunakan modul status
+
+    print(f"[API GET /api/nilai/subjects/] Fetching summary for teacher: {logged_in_teacher.user.username}")
     try:
-        # Ambil semua matapelajaran aktif (atau filter berdasarkan guru jika diperlukan nanti)
-        active_subjects = MataPelajaran.objects.filter(
-            isDeleted=False, isActive=True
-        ).prefetch_related(
-            'komponenpenilaian_matpel', 'siswa_terdaftar'
-        ).select_related('tahunAjaran') # Ambil data tahun ajaran juga
-
+        active_subjects = MataPelajaran.objects.filter(teacher=logged_in_teacher, isDeleted=False, isActive=True).prefetch_related('komponenpenilaian_matpel', 'siswa_terdaftar').select_related('tahunAjaran')
         summary_list = []
         for subject in active_subjects:
-            components = subject.komponenpenilaian_matpel.all()
-            students = subject.siswa_terdaftar.filter(isActive=True, isDeleted=False) # Filter siswa aktif
+            components = subject.komponenpenilaian_matpel.all(); students_qs = subject.siswa_terdaftar.filter(isActive=True, isDeleted=False)
+            component_count = components.count(); total_weight = sum(comp.bobotKomponen for comp in components if comp.bobotKomponen is not None); student_count = students_qs.count()
 
-            component_count = components.count()
-            total_weight = sum(comp.bobotKomponen for comp in components if comp.bobotKomponen is not None)
-            student_count = students.count()
+            # --- GANTI NAMA VARIABEL LOKAL ---
+            subject_status = 'Belum Dimulai' # <<< Ganti nama variabel ini
+            # ----------------------------------
+            total_possible_entries = student_count * component_count
+            if total_possible_entries > 0 :
+                student_user_ids = students_qs.values_list('user_id', flat=True); component_ids = components.values_list('id', flat=True)
+                filled_count = Nilai.objects.filter(student_id__in=student_user_ids, komponen_id__in=component_ids).count()
 
-            # Hitung Status Pengisian Nilai (berdasarkan model Nilai yang ada)
-            status = 'Belum Dimulai'
-            if student_count > 0 :
-                 # Hitung berapa banyak siswa yang SUDAH punya record Nilai untuk matpel ini
-                filled_count = Nilai.objects.filter(
-                    matapelajaran=subject,
-                    student__in=students # Cek dari siswa yang terdaftar & aktif
-                ).count()
-
-                # Jika semua siswa punya record Nilai (meskipun hanya 1 nilai per siswa)
-                if filled_count == student_count:
-                    status = 'Terisi Penuh'
+                if filled_count == total_possible_entries:
+                     subject_status = 'Terisi Penuh' # <<< Gunakan nama baru
                 elif filled_count > 0:
-                    status = 'Dalam Proses'
-                # else: status = 'Belum Dimulai' # Default
+                     subject_status = 'Dalam Proses' # <<< Gunakan nama baru
 
-            # Format komponen untuk dimasukkan ke summary
-            components_data = [
-                 {'id': str(comp.id), 'name': comp.namaKomponen, 'weight': comp.bobotKomponen}
-                 for comp in components
-            ]
-
+            components_data = [{'id': str(comp.id), 'name': comp.namaKomponen, 'weight': comp.bobotKomponen} for comp in components]
             summary_list.append({
-                "id": str(subject.id), # ID primary key
-                "subjectId": subject.kode, # Gunakan kode sebagai subjectId? Atau tetap ID?
-                "name": subject.nama,
+                "id": str(subject.id), "subjectId": subject.kode, "name": subject.nama,
                 "academicYear": str(subject.tahunAjaran.tahunAjaran) if subject.tahunAjaran else "N/A",
-                "totalWeight": total_weight,
-                "componentCount": component_count,
+                "totalWeight": total_weight, "componentCount": component_count,
                 "studentCount": student_count,
-                "status": status,
-                "components": components_data # Sertakan detail komponen
+                # --- Gunakan nama baru di response ---
+                "status": subject_status, # <<< Gunakan nama baru
+                # ------------------------------------
+                "components": components_data
             })
 
-        print(f"[API GET /api/guru/mata-pelajaran] Summary generated: {len(summary_list)} subjects.")
-        return JsonResponse(summary_list, status=200, safe=False) # safe=False karena return berupa list
+        return Response(summary_list, status=status.HTTP_200_OK) # <-- Menggunakan modul status
 
     except Exception as e:
-        print(f"[API GET /api/guru/mata-pelajaran] Error: {e}")
-        return error_response("Kesalahan Server Internal saat mengambil summary.", status=500)
+        print(f"[API GET /api/nilai/subjects/] Error for teacher {logged_in_teacher.user.username}: {e}")
+        traceback.print_exc()
+        # Sekarang bisa panggil drf_error_response dengan benar
+        return drf_error_response("Kesalahan Server Internal saat mengambil summary.", http_status=status.HTTP_500_INTERNAL_SERVER_ERROR) # <-- Menggunakan modul status
+
+# --- View grade_data_view (Tidak perlu diubah untuk error ini) ---
+# @api_view(['GET', 'POST'])
+# @permission_classes([IsAuthenticated])
+# def grade_data_view(request: Request, matapelajaran_id: int):
+#    ... (kode view ini tetap sama) ...

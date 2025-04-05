@@ -16,7 +16,7 @@ class KomponenPenilaian(models.Model):
     )
 
     nilai = models.ForeignKey(
-        Nilai,
+        "nilai.Nilai",
         on_delete=models.PROTECT,
         null=True,
         related_name="komponenpenilaian_nilai"
