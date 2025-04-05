@@ -48,3 +48,4 @@ class MataPelajaran(models.Model):
 
     def __str__(self):
         return f"{self.get_kategoriMatpel_display()} ({self.kode}) - Tahun {self.tahunAjaran}"
+    
