@@ -1,12 +1,14 @@
 from django.db import models
 from django.utils import timezone
 from matapelajaran.models import *
+from tahunajaran.models import *
 
 class Event(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     createdAt = models.DateTimeField(default=timezone.now)
     updatedAt = models.DateTimeField(auto_now=True)
+    angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True)
 
     # list matpel yg admin taro sebagai pilihan per tier
     tier1_option1 = models.ForeignKey(MataPelajaran, on_delete=models.SET_NULL, related_name="t1o1")
