@@ -1,8 +1,6 @@
 from django.utils import timezone
 from django.db import models
 from matapelajaran.models import MataPelajaran
-from nilai.models import Nilai
-
 class KomponenPenilaian(models.Model):
     namaKomponen = models.CharField(max_length=100, blank=False, null=False)  # <- removed unique=True
     bobotKomponen = models.IntegerField(blank=False, null=False) 
@@ -16,7 +14,7 @@ class KomponenPenilaian(models.Model):
     )
 
     nilai = models.ForeignKey(
-        Nilai,
+        "nilai.Nilai",
         on_delete=models.PROTECT,
         null=True,
         related_name="komponenpenilaian_nilai"
