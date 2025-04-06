@@ -165,10 +165,28 @@ def grade_data_view(request: Request, matapelajaran_id: int):
                     for comp in assessment_components_formatted: cid = comp['id']; initial_grades[sid][cid] = grades_map.get(sid, {}).get(cid, None) # Default null jika tidak ada
             else: # Buat struktur kosong jika tidak ada siswa/komponen
                  for sd in students_list: initial_grades[sd['id']] = {comp['id']: None for comp in assessment_components_formatted}
-            # --- AKHIR initialGrades ---
+                  # --- TAMBAHKAN academicYear ke response_data ---
+            academic_year_str = "N/A" # Default jika tidak ada
+            if matapelajaran.tahunAjaran: # Cek apakah relasi tahunAjaran ada
+                try:
+                    # Ambil nilai integer tahun dari objek TahunAjaran yang berelasi
+                    academic_year_str = str(matapelajaran.tahunAjaran.tahunAjaran)
+                except AttributeError:
+                    # Fallback jika objek TahunAjaran tidak punya field 'tahunAjaran' (seharusnya tidak terjadi)
+                    print(f"Warning: Field 'tahunAjaran' tidak ditemukan pada objek TahunAjaran ID {matapelajaran.tahunAjaran_id}")
+                    academic_year_str = f"ID {matapelajaran.tahunAjaran_id}"
+            # -----------------------------------------------
 
-            response_data = {"students": students_list, "assessmentComponents": assessment_components_formatted, "subjectName": matapelajaran.nama, "initialGrades": initial_grades}
-            return Response(response_data, status=status.HTTP_200_OK) # Gunakan Response DRF
+            # --- Sertakan academicYear dalam Respons ---
+            response_data = {
+                "students": students_list,
+                "assessmentComponents": assessment_components_formatted,
+                "subjectName": matapelajaran.nama,
+                "initialGrades": initial_grades,
+                "academicYear": academic_year_str 
+            }
+            # -----------------------------------------
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e: print(f"...Error GET: {e}"); traceback.print_exc(); return drf_error_response("Error internal GET.", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -223,7 +241,7 @@ def drf_error_response(message, http_status=status.HTTP_400_BAD_REQUEST): # <-- 
 
 # --- View get_teacher_subjects_summary (Variabel diganti) ---
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+# @permission_classes([IsAuthenticated])
 def get_teacher_subjects_summary(request: Request):
     # ... (Logika get teacher SAMA) ...
     try: logged_in_teacher = request.user.teacher
@@ -269,9 +287,3 @@ def get_teacher_subjects_summary(request: Request):
         traceback.print_exc()
         # Sekarang bisa panggil drf_error_response dengan benar
         return drf_error_response("Kesalahan Server Internal saat mengambil summary.", http_status=status.HTTP_500_INTERNAL_SERVER_ERROR) # <-- Menggunakan modul status
-
-# --- View grade_data_view (Tidak perlu diubah untuk error ini) ---
-# @api_view(['GET', 'POST'])
-# @permission_classes([IsAuthenticated])
-# def grade_data_view(request: Request, matapelajaran_id: int):
-#    ... (kode view ini tetap sama) ...
