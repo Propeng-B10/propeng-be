@@ -102,7 +102,7 @@ def profile(request, id):
     """Get detailed profile information for a user"""
     try:
         user = User.objects.get(id=id)
-        
+        print("yes profile")
         # Initialize base profile data
         profile_data = {
             "user_id": user.id,
@@ -112,7 +112,8 @@ def profile(request, id):
             'createdAt':user.createdAt,
             'updatedAt':user.updatedAt
         }
-        
+        print("here profile")
+        print(profile_data)
         # Add role-specific data
         if user.role == "student":
             student = Student.objects.filter(user=user).first()
@@ -121,6 +122,7 @@ def profile(request, id):
             except :
                 active_classes = None
             # .values_list('namaKelas', flat=True)
+            statusAbsen = None
             print("workss")
             if active_classes:
                 print("kejalan")
@@ -130,9 +132,16 @@ def profile(request, id):
                 if absensi:
                     statusAbsen = absensi.check_absensi(int(user.id))
             print("doenst")
-            print(absensi)
             print("works")
+            print("diatas if student")
             if student:
+                print(student.name)
+                print(student.nisn)
+                print(active_classes.namaKelas if active_classes else None)
+                print(active_classes.id if active_classes else None)
+                print(statusAbsen if statusAbsen else None)
+                print("disini loh")
+                
                 profile_data.update({
                     "name": student.name,
                     "nisn": student.nisn,
@@ -143,17 +152,15 @@ def profile(request, id):
                     "classId":active_classes.id if active_classes else None,
                     "sudahAbsen":statusAbsen if statusAbsen else None
                 })
-            else:
-                return Response({
-                    "status": 404,
-                    "message": "Student profile not found"
-                }, status=status.HTTP_404_NOT_FOUND)
+                print(profile_data)
                 
         elif user.role == "teacher":
             print("works")
             teacher = Teacher.objects.filter(user=user).first()
+            print("disini profile")
             homeroom_class = teacher.homeroomId.namaKelas if teacher.homeroomId and not teacher.homeroomId.isDeleted and teacher.homeroomId.isActive else None
             print(teacher.homeroomId)
+            print("homeroom diatas")
             if teacher:
                 profile_data.update({
                     "name": teacher.name,
@@ -164,8 +171,9 @@ def profile(request, id):
                     "homeroomId" : teacher.homeroomId_id if homeroom_class else None,
                     # still none, nanti kita tambahin kalo mau hehe
                 })
-            print("here")
+            print("here dibawah gw homeroom_class")
             if homeroom_class:
+                print("shouldnt be here")
                 teacher_classes = Kelas.objects.filter(
                     waliKelas=teacher,
                     isActive=True,
@@ -216,11 +224,6 @@ def profile(request, id):
                             },
                         })          
                         print(profile_data)    
-            else:
-                return Response({
-                    "status": 404,
-                    "message": "Teacher profile not found"
-                }, status=status.HTTP_404_NOT_FOUND)  
         return Response({
             "status": 200,
             "message": "Successfully retrieved user profile",
@@ -874,3 +877,60 @@ def list_users(request):
         'message': 'Berhasil mendapatkan semua list user',
         'data': user_list
     }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def student_by_angkatan(request, angkatan):
+    try:
+        angkatan = int(angkatan)
+        if angkatan < 100:  
+            angkatan += 2000 
+        print(angkatan)
+        try:
+            print("try")
+            angkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
+        except:
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": f"Tidak terdapat angkatan tersebut ({angkatan}) pada sistem."
+            }, status=404)
+
+        print(angkatanObj.angkatan)
+        print(angkatanObj.id)
+        siswa_angkatan= Student.objects.filter(
+            isActive=True,
+            isDeleted=False,
+            angkatan=angkatanObj.id
+        )
+        print(siswa_angkatan)
+        print("heree")
+        
+        # Ambil siswa yang belum masuk kelas atau hanya masuk kelas yang tidak aktif/dihapus
+        # Changed id__in to user_id__in to match the model's field
+#
+        if not siswa_angkatan.exists():
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": f"Tidak ada siswa yang tersedia untuk angkatan {angkatan}."
+            }, status=404)
+
+        return JsonResponse({
+            "status": 200,
+            "message": f"Daftar siswa yang tersedia untuk angkatan {angkatan}",
+            "data": [
+                {
+                    "id": s.user.id,
+                    "name": s.name,
+                    "isAssignedtoClass": s.isAssignedtoClass,
+                    "nisn": s.nisn,
+                    "username": s.username,
+                    "angkatan": s.angkatan.angkatan
+                } for s in siswa_angkatan
+            ]
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)

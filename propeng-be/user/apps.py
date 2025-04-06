@@ -249,6 +249,63 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
             "tahunAjaran": tahun_2025,
             "angkatan": angkatan_2023,
             "teacher": teachers[0]
+        },
+        # 8 more MataPelajaran with kategoriMatpel "Peminatan"
+        {
+            "kategoriMatpel": "Peminatan",
+            "nama": "MATEMATIKA MINAT",
+            "tahunAjaran": tahun_2025,
+            "angkatan": angkatan_2023,
+            "teacher": teachers[2]
+        },
+        {
+            "kategoriMatpel": "Peminatan",
+            "nama": "KIMIA MINAT",
+            "tahunAjaran": tahun_2025,
+            "angkatan": angkatan_2023,
+            "teacher": teachers[3]
+        },
+        {
+            "kategoriMatpel": "Peminatan",
+            "nama": "EKONOMI",
+            "tahunAjaran": tahun_2025,
+            "angkatan": angkatan_2023,
+            "teacher": teachers[4]
+        },
+        {
+            "kategoriMatpel": "Peminatan",
+            "nama": "GEOGRAFI",
+            "tahunAjaran": tahun_2025,
+            "angkatan": angkatan_2023,
+            "teacher": teachers[5]
+        },
+        {
+            "kategoriMatpel": "Peminatan",
+            "nama": "BAHASA INGGRIS MINAT",
+            "tahunAjaran": tahun_2025,
+            "angkatan": angkatan_2023,
+            "teacher": teachers[6]
+        },
+        {
+            "kategoriMatpel": "Peminatan",
+            "nama": "BAHASA JEPANG",
+            "tahunAjaran": tahun_2025,
+            "angkatan": angkatan_2023,
+            "teacher": teachers[0]
+        },
+        {
+            "kategoriMatpel": "Peminatan",
+            "nama": "SEJARAH MINAT",
+            "tahunAjaran": tahun_2025,
+            "angkatan": angkatan_2023,
+            "teacher": teachers[1]
+        },
+        {
+            "kategoriMatpel": "Peminatan",
+            "nama": "INFORMATIKA",
+            "tahunAjaran": tahun_2025,
+            "angkatan": angkatan_2023,
+            "teacher": teachers[2]
         }
     ]
     

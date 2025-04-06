@@ -26,4 +26,5 @@ urlpatterns = [
     path(('api/absen/'), include('absensi.urls')),
     path('api/nilai/', include('nilai.urls')),
     path('api/komponen/', include('komponenpenilaian.urls')),
+    path('api/linimasa/', include('pengajuan_peminatan.urls')),
 ]
