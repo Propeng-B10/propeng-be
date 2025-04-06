@@ -877,3 +877,60 @@ def list_users(request):
         'message': 'Berhasil mendapatkan semua list user',
         'data': user_list
     }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def student_by_angkatan(request, angkatan):
+    try:
+        angkatan = int(angkatan)
+        if angkatan < 100:  
+            angkatan += 2000 
+        print(angkatan)
+        try:
+            print("try")
+            angkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
+        except:
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": f"Tidak terdapat angkatan tersebut ({angkatan}) pada sistem."
+            }, status=404)
+
+        print(angkatanObj.angkatan)
+        print(angkatanObj.id)
+        siswa_angkatan= Student.objects.filter(
+            isActive=True,
+            isDeleted=False,
+            angkatan=angkatanObj.id
+        )
+        print(siswa_angkatan)
+        print("heree")
+        
+        # Ambil siswa yang belum masuk kelas atau hanya masuk kelas yang tidak aktif/dihapus
+        # Changed id__in to user_id__in to match the model's field
+#
+        if not siswa_angkatan.exists():
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": f"Tidak ada siswa yang tersedia untuk angkatan {angkatan}."
+            }, status=404)
+
+        return JsonResponse({
+            "status": 200,
+            "message": f"Daftar siswa yang tersedia untuk angkatan {angkatan}",
+            "data": [
+                {
+                    "id": s.user.id,
+                    "name": s.name,
+                    "isAssignedtoClass": s.isAssignedtoClass,
+                    "nisn": s.nisn,
+                    "username": s.username,
+                    "angkatan": s.angkatan.angkatan
+                } for s in siswa_angkatan
+            ]
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)
