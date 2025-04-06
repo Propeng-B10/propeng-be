@@ -175,19 +175,23 @@ def grade_data_view(request: Request, matapelajaran_id: int):
                     # Fallback jika objek TahunAjaran tidak punya field 'tahunAjaran' (seharusnya tidak terjadi)
                     print(f"Warning: Field 'tahunAjaran' tidak ditemukan pada objek TahunAjaran ID {matapelajaran.tahunAjaran_id}")
                     academic_year_str = f"ID {matapelajaran.tahunAjaran_id}"
-            # -----------------------------------------------
+            teacher_name = "" # Default null jika matpel tidak punya guru
+            teacher_nisp = ""
+            if matapelajaran.teacher:
+                 # Ambil ID dari user yang berelasi dengan teacher (karena PK Teacher = User ID)
+                 teacher_name = str(matapelajaran.teacher.name)
+                 teacher_nisp = str(matapelajaran.teacher.nisp)
 
-            # --- Sertakan academicYear dalam Respons ---
             response_data = {
                 "students": students_list,
                 "assessmentComponents": assessment_components_formatted,
                 "subjectName": matapelajaran.nama,
                 "initialGrades": initial_grades,
-                "academicYear": academic_year_str 
+                "academicYear": academic_year_str,
+                "teacherName": teacher_name,
+                "teacherNisp": teacher_nisp
             }
-            # -----------------------------------------
             return Response(response_data, status=status.HTTP_200_OK)
-
         except Exception as e: print(f"...Error GET: {e}"); traceback.print_exc(); return drf_error_response("Error internal GET.", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # ===========================
