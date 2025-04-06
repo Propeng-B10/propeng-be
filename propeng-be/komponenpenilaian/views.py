@@ -56,8 +56,8 @@ def get_all_komponen_penilaian(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def get_komponen_penilaian_of_mata_pelajaran(request):
-    mataPelajaranId = request.query_params.get("id")
+def get_komponen_penilaian_of_mata_pelajaran(request, pk):
+    mataPelajaranId = pk
     
     if not mataPelajaranId:
         return Response({
@@ -86,8 +86,8 @@ def get_komponen_penilaian_of_mata_pelajaran(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def get_komponen_penilaian_by_id(request):
-    komponenPenilaianId = request.query_params.get("id")
+def get_komponen_penilaian_by_id(request, pk):
+    komponenPenilaianId = pk
     
     if not komponenPenilaianId:
         return Response({

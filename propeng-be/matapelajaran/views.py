@@ -241,3 +241,57 @@ def get_mata_pelajaran_by_id(request, pk):
             "status": 500,
             "message": f"Error retrieving MataPelajaran: {str(e)}"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_mata_pelajaran_by_teacher_id(request, pk):
+    """Retrieve all MataPelajaran assigned to a specific teacher (by teacher user_id)"""
+    try:
+        matpels = MataPelajaran.objects.filter(teacher__user_id=pk)
+
+        if not matpels.exists():
+            return Response({
+                "status": 404,
+                "message": "No MataPelajaran found for this teacher"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        matpel_list = []
+        for matpel in matpels:
+            siswa_terdaftar_list = [
+                {
+                    "id": student.user_id,
+                    "name": student.name,
+                    "username": student.username,
+                    "nisn": student.nisn
+                } for student in matpel.siswa_terdaftar.all()
+            ]
+
+            matpel_data = {
+                "id": matpel.id,
+                "nama": matpel.nama,
+                "kategoriMatpel": matpel.get_kategoriMatpel_display(),
+                "kode": matpel.kode,
+                "tahunAjaran": matpel.tahunAjaran.tahunAjaran if matpel.tahunAjaran else None,
+                "teacher": {
+                    "id": matpel.teacher.user_id if matpel.teacher else None,
+                    "name": matpel.teacher.name if matpel.teacher else None
+                },
+                "jumlah_siswa": matpel.siswa_terdaftar.count(),
+                "siswa_terdaftar": siswa_terdaftar_list,
+                "angkatan": matpel.angkatan.angkatan if matpel.angkatan else None,
+                "status": "Active" if matpel.isActive else "Inactive"
+            }
+
+            matpel_list.append(matpel_data)
+
+        return Response({
+            "status": 200,
+            "message": "Successfully retrieved MataPelajaran for teacher",
+            "data": matpel_list
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error retrieving MataPelajaran: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
