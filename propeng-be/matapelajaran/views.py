@@ -1,3 +1,4 @@
+from django.http import QueryDict
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
@@ -85,7 +86,7 @@ def list_matapelajaran(request):
 @api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def update_mata_pelajaran(request, pk):
-    """Update an existing MataPelajaran"""
+    """Update only nama, teacher, and siswa_terdaftar of an existing MataPelajaran"""
     try:
         matapelajaran = MataPelajaran.objects.get(pk=pk)
     except MataPelajaran.DoesNotExist:
@@ -93,49 +94,33 @@ def update_mata_pelajaran(request, pk):
             "status": 404,
             "message": "MataPelajaran not found"
         }, status=status.HTTP_404_NOT_FOUND)
-    
-    # Create a copy of the request data
-    data = request.data.copy()
-    
-    # Handle partial updates (PATCH)
-    partial = request.method == 'PATCH'
-    
-    # Process tahunAjaran if provided
-    if 'tahunAjaran' in data:
-        tahun = data.get('tahunAjaran')
-        try:
-            tahun_ajaran, created = TahunAjaran.objects.get_or_create(tahunAjaran=tahun)
-            # For validation in the serializer
-            data['tahunAjaran_instance'] = tahun_ajaran.id
-        except Exception as e:
-            return Response({
-                "status": 400,
-                "message": f"Error with TahunAjaran: {str(e)}",
-                "error": str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
-    if 'status' in data:
-        if data['status'].lower() == "active":
-            data['status'] = True
-        elif data['status'].lower() == "inactive":
-            data["status"] = False
-        print(data)
 
-    
-    # Create serializer with the instance and data
-    serializer = MataPelajaranSerializer(matapelajaran, data=data, partial=partial)
-    
+    data = request.data.copy()
+
+    # Filter the data to only allow specific fields
+    allowed_fields = ['nama', 'teacher', 'siswa_terdaftar']
+    data = {key: data.getlist(key) if isinstance(data, QueryDict) and key == 'siswa_terdaftar' else data.get(key) 
+            for key in allowed_fields if key in data}
+
+    # If siswa_terdaftar is included, handle separately
+    siswa_ids = data.pop('siswa_terdaftar', None)
+
+    serializer = MataPelajaranSerializer(matapelajaran, data=data, partial=True)
+
     if serializer.is_valid():
         try:
             updated_matapelajaran = serializer.save()
+
+            if siswa_ids is not None:
+                updated_matapelajaran.siswa_terdaftar.set(siswa_ids)
+
             return Response({
                 "status": 200,
                 "message": "MataPelajaran updated successfully",
                 "data": serializer.data
             }, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             return Response({
                 "status": 400,
                 "message": f"Failed to update MataPelajaran: {str(e)}",
@@ -147,7 +132,6 @@ def update_mata_pelajaran(request, pk):
             "message": "Validation failed",
             "errors": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
-
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
@@ -226,7 +210,8 @@ def get_mata_pelajaran_by_id(request, pk):
             {
                 "id": student.user_id,
                 "name": student.name,
-                "username": student.username
+                "username": student.username,
+                "nisn": student.nisn
             } for student in matapelajaran.siswa_terdaftar.all()
         ]
         
@@ -244,7 +229,6 @@ def get_mata_pelajaran_by_id(request, pk):
             "siswa_terdaftar": siswa_terdaftar_list,
             "angkatan": matapelajaran.angkatan.angkatan if matapelajaran.angkatan else None
         }
-
         
         return Response({
             "status": 200,
@@ -252,6 +236,60 @@ def get_mata_pelajaran_by_id(request, pk):
             "data": matapelajaran_data
         }, status=status.HTTP_200_OK)
         
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error retrieving MataPelajaran: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_mata_pelajaran_by_teacher_id(request, pk):
+    """Retrieve all MataPelajaran assigned to a specific teacher (by teacher user_id)"""
+    try:
+        matpels = MataPelajaran.objects.filter(teacher__user_id=pk)
+
+        if not matpels.exists():
+            return Response({
+                "status": 404,
+                "message": "No MataPelajaran found for this teacher"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        matpel_list = []
+        for matpel in matpels:
+            siswa_terdaftar_list = [
+                {
+                    "id": student.user_id,
+                    "name": student.name,
+                    "username": student.username,
+                    "nisn": student.nisn
+                } for student in matpel.siswa_terdaftar.all()
+            ]
+
+            matpel_data = {
+                "id": matpel.id,
+                "nama": matpel.nama,
+                "kategoriMatpel": matpel.get_kategoriMatpel_display(),
+                "kode": matpel.kode,
+                "tahunAjaran": matpel.tahunAjaran.tahunAjaran if matpel.tahunAjaran else None,
+                "teacher": {
+                    "id": matpel.teacher.user_id if matpel.teacher else None,
+                    "name": matpel.teacher.name if matpel.teacher else None
+                },
+                "jumlah_siswa": matpel.siswa_terdaftar.count(),
+                "siswa_terdaftar": siswa_terdaftar_list,
+                "angkatan": matpel.angkatan.angkatan if matpel.angkatan else None,
+                "status": "Active" if matpel.isActive else "Inactive"
+            }
+
+            matpel_list.append(matpel_data)
+
+        return Response({
+            "status": 200,
+            "message": "Successfully retrieved MataPelajaran for teacher",
+            "data": matpel_list
+        }, status=status.HTTP_200_OK)
+
     except Exception as e:
         return Response({
             "status": 500,
