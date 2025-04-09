@@ -2,8 +2,9 @@ from django.utils import timezone
 from django.db import models
 from matapelajaran.models import MataPelajaran
 class KomponenPenilaian(models.Model):
-    namaKomponen = models.CharField(max_length=100, blank=False, null=False)  # <- removed unique=True
+    namaKomponen = models.CharField(max_length=100, blank=False, null=False) 
     bobotKomponen = models.IntegerField(blank=False, null=False) 
+    tipeKomponen = models.CharField(max_length=15, blank=False, null=False) 
     createdAt = models.DateTimeField(default=timezone.now)
 
     mataPelajaran = models.ForeignKey(
