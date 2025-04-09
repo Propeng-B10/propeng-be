@@ -10,5 +10,6 @@ urlpatterns = [
     path('submisi/', get_semua_detail_pilihan_siswa, name='get_submission'),
     path('', get_all_events, name='get_all_events'),
     path('angkatan/', get_all_angkatan, name='angkatan'),
-    path('tahun-ajaran/', get_all_tahun_ajaran, name="tahun_ajaran")
+    path('tahun-ajaran/', get_all_tahun_ajaran, name="tahun_ajaran"),
+    path('delete/<int:pk>', delete_linimasa, name="hapus")
 ]

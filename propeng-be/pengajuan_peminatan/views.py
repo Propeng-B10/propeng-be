@@ -59,6 +59,8 @@ def create_event(request):
                 "data": data_event
             }, status=status.HTTP_201_CREATED)
 
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_pilihan_siswa(request):
@@ -675,6 +677,17 @@ def get_all_angkatan(request):
             "status": 200,
             "message": "Data Angkatan",
             "data": data_angkatan
+        }, status=status.HTTP_200_OK)
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_linimasa(request,pk):
+    event = Event.objects.get(id=pk)
+    event.delete()
+    return Response({
+            "status": 200,
+            "message": "Data Angkatan",
+            "data": "Linimasa berhasil dihapus"
         }, status=status.HTTP_200_OK)
 
 
