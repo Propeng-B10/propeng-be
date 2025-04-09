@@ -8,8 +8,7 @@ class Event(models.Model):
     end_date = models.DateField()
     createdAt = models.DateTimeField(default=timezone.now)
     updatedAt = models.DateTimeField(auto_now=True)
-    angkatan11 = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True, related_name="angkatan_kelas_11")
-    angkatan12 = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True, related_name="angkatan_kelas_12")
+    angkatan = models.ForeignKey(Angkatan, on_delete=models.CASCADE, null=True, blank=True, related_name="angkatan_kelas_11")
 
     # list matpel yg admin taro sebagai pilihan per tier
     tier1_option1 = models.ForeignKey(MataPelajaran, on_delete=models.SET_NULL, related_name="t1o1", null=True)
@@ -61,7 +60,7 @@ class PilihanSiswa(models.Model):
     statustier2 = models.BooleanField(null=True, blank=True)
     statustier3 = models.BooleanField(null=True, blank=True)
     statustier4 = models.BooleanField(null=True, blank=True)
-    submitted_at = models.DateTimeField(default=timezone.now)
+    submitted_at = models.DateTimeField(auto_now=True)
 
 
 

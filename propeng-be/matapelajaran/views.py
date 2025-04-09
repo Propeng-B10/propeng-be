@@ -295,3 +295,47 @@ def get_mata_pelajaran_by_teacher_id(request, pk):
             "status": 500,
             "message": f"Error retrieving MataPelajaran: {str(e)}"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_matapelajaran_minat_by_tahunajaran(request, pk):
+    """List all mata pelajaran, including both archived and active"""
+    try:
+        matapelajaran = MataPelajaran.objects.filter(isDeleted=False, tahunAjaran=pk)
+        matapelajaran_list = []
+        
+        for mapel in matapelajaran:
+            # Get teacher name if assigned
+            teacher_name = mapel.teacher.name if mapel.teacher else None
+            
+            # Count enrolled students
+            student_count = mapel.siswa_terdaftar.count()
+            
+            mapel_data = {
+                "id": mapel.id,
+                "nama": mapel.nama,
+                "kategoriMatpel": mapel.get_kategoriMatpel_display(),  # Get readable choice name
+                "kode": mapel.kode,
+                "tahunAjaran": mapel.tahunAjaran.tahunAjaran if mapel.tahunAjaran else None,
+                "teacher": {
+                    "id": mapel.teacher.user_id if mapel.teacher else None,
+                    "name": teacher_name
+                },
+                "jumlah_siswa": student_count,
+                "status": "Active" if mapel.isActive else "Inactive",
+                "angkatan":mapel.angkatan.angkatan if mapel.angkatan else None
+            }
+            matapelajaran_list.append(mapel_data)
+            
+        return Response({
+            "status": 200,
+            "message": "Successfully retrieved mata pelajaran list",
+            "data": matapelajaran_list
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": f"Error retrieving mata pelajaran list: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
