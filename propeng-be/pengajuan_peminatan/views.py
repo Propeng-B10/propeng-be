@@ -10,20 +10,23 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db.models import Q
 
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_event(request):
+    print("error disini")
+    print(request)
     print("🔹 create event")
     data = request.data
+    print(data)
     startdate = data.get('start_date')
     enddate = data.get('end_date')
-    angkatansebelas = data.get('angkatan11')
-    angkatanduabelas = data.get('angkatan12')
+    angkatan = data.get('angkatan')
     idid_matpel = data.get('matpels')
     # ekspektasinya, isi dari idid matpel ini berupa list id, dari t1o1 sampai t4o2
     # berupa [1,2,3,4,...,8] 
-    angkatansebelas = Angkatan.objects.get(angkatan=int(data.get('angkatan11')))
-    angkatanduabelas = Angkatan.objects.get(angkatan=int(data.get('angkatan12')))
+    angkatan = Angkatan.objects.get(id=angkatan)
 
     capaciti_matpel = data.get('capacity')
     # ekspektasinya, isi dari capacity ini jg mirip, berupa list capacity int, dari t1o1 sampai t4o2
@@ -35,7 +38,7 @@ def create_event(request):
         matpel = MataPelajaran.objects.get(id=int(i))
         matpelObj.append(matpel)
 
-    event = Event.objects.create(start_date=startdate,end_date=enddate,angkatan11=angkatansebelas,angkatan12=angkatanduabelas,
+    event = Event.objects.create(start_date=startdate,end_date=enddate,angkatan=angkatan,
                                  tier1_option1=matpelObj[0],tier1_option2=matpelObj[1],
                                  tier2_option1=matpelObj[2],tier2_option2=matpelObj[3],
                                  tier3_option1=matpelObj[0],tier3_option2=matpelObj[5],
@@ -47,7 +50,7 @@ def create_event(request):
     data_event = {
         "start_date" : event.start_date,
         "end_date" : event.end_date,
-        "angkatan" : f"angkatan {event.angkatan11} dan angkatan {event.angkatan12}"
+        "angkatan" : f"angkatan {event.angkatan}"
     }
     
     return Response({
@@ -254,13 +257,13 @@ def get_active_event(request):
         current_date = timezone.now().date()
         
         active_events = Event.objects.filter(
-            (Q(angkatan11=angkatan) | Q(angkatan12=angkatan)) &
+            (Q(angkatan=angkatan)) &
             (Q(start_date__lte=current_date) & Q(end_date__gte=current_date))
         ).order_by('-start_date')
         
         if not active_events.exists():
             future_events = Event.objects.filter(
-                (Q(angkatan11=angkatan) | Q(angkatan12=angkatan)) &
+                (Q(angkatan=angkatan)) &
                 (Q(start_date__gt=current_date))
             ).order_by('start_date')
             
@@ -280,7 +283,7 @@ def get_active_event(request):
                 }, status=status.HTTP_200_OK)
             
             past_events = Event.objects.filter(
-                (Q(angkatan11=angkatan) | Q(angkatan12=angkatan)) &
+                (Q(angkatan=angkatan)) &
                 (Q(end_date__lt=current_date))
             ).order_by('-end_date')
             
@@ -351,8 +354,7 @@ def get_all_events(request):
                 "id": event.id,
                 "start_date": event.start_date,
                 "end_date": event.end_date,
-                "angkatan11": event.angkatan11.angkatan if event.angkatan11 else None,
-                "angkatan12": event.angkatan12.angkatan if event.angkatan12 else None,
+                "angkatan": event.angkatan.angkatan if event.angkatan else None,
                 "created_at": event.createdAt,
                 "updated_at": event.updatedAt,
                 "submissions_count": submissions_count,
@@ -423,6 +425,70 @@ def get_all_events(request):
             "message": "Terjadi kesalahan",
             "error": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_semua_detail_pilihan_siswa(request):
+    data = request.data
+    linimasa_id = data.get('linimasaId')
+    LinimasaObj = Event.objects.get(id=linimasa_id)
+
+    PilihanSiswaObj = PilihanSiswa.objects.filter(Event=LinimasaObj)
+    data_pilihan = []
+    data_matkul = []
+    for i in PilihanSiswaObj:
+        PilihanSiswaData = ({
+            "id":i.id,
+            "nama_siswa": i.student.username,
+            "id_siswa" : i.student.user_id,
+            "tier1":i.tier1,
+            "tier2":i.tier2,
+            "tier3":i.tier3,
+            "tier4":i.tier4,
+            "statustier1":i.statustier1,
+            "statustier2":i.statustier2,
+            "statustier3":i.statustier3,
+            "statustier4":i.statustier4,
+            "submitted_at":i.submitted_at
+        })
+        data_pilihan.append(PilihanSiswaData)
+    return Response({
+            "status": 200,
+            "message": "List Submisi Siswa berhasil didapatkan",
+            "data": data_pilihan
+        }, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_detail_pilihan_siswa(request):
+    data = request.data
+    submisi_id = data.get('submisiId')
+    LinimasaObj = Event.objects.get(id=submisi_id)
+
+    PilihanSiswaObj = PilihanSiswa.objects.filter(Event=LinimasaObj)
+    data_pilihan = []
+    for i in PilihanSiswaObj:
+        PilihanSiswaData = ({
+            "id":i.id,
+            "nama_siswa": i.student.username,
+            "id_siswa" : i.student.user_id,
+            "tier1":i.tier1,
+            "tier2":i.tier2,
+            "tier3":i.tier3,
+            "tier4":i.tier4,
+            "statustier1":i.statustier1,
+            "statustier2":i.statustier2,
+            "statustier3":i.statustier3,
+            "statustier4":i.statustier4,
+            "submitted_at":i.submitted_at
+        })
+        data_pilihan.append(PilihanSiswaData)
+    return Response({
+            "status": 200,
+            "message": "List Submisi Siswa berhasil didapatkan",
+            "data": data_pilihan
+        }, status=status.HTTP_200_OK)
+    
 
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
@@ -593,3 +659,38 @@ def update_pilihan_status(request):
             "message": "Terjadi kesalahan",
             "error": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_all_angkatan(request):
+    all_angkatan = Angkatan.objects.all()
+    data_angkatan = []
+    for i in all_angkatan:
+        data_angkatan_temp = {
+            "id":i.id,
+            "angkatan":i.angkatan
+        }
+        data_angkatan.append(data_angkatan_temp)
+    return Response({
+            "status": 200,
+            "message": "Data Angkatan",
+            "data": data_angkatan
+        }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_all_tahun_ajaran(request):
+    all_angkatan = TahunAjaran.objects.all()
+    data_angkatan = []
+    for i in all_angkatan:
+        data_angkatan_temp = {
+            "id":i.id,
+            "tahunAjaran":i.tahunAjaran
+        }
+        data_angkatan.append(data_angkatan_temp)
+    return Response({
+            "status": 200,
+            "message": "Data Angkatan",
+            "data": data_angkatan
+        }, status=status.HTTP_200_OK)
