@@ -60,7 +60,7 @@ class Kelas(models.Model):
         self.kode = kode
         absensi_harian.kode = kode
         absensi_harian.save()
-        self.kode_expiry_time = timezone.now() + timedelta(minutes=5)
+        self.kode_expiry_time = timezone.now() + timedelta(seconds=30)  # Set expiry time to 30 seconds from now
         self.save()
 
         return self.kode
