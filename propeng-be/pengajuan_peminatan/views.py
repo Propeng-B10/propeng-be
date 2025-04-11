@@ -430,12 +430,10 @@ def get_all_events(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def get_semua_detail_pilihan_siswa(request):
-    data = request.data
-    linimasa_id = data.get('linimasaId')
-    LinimasaObj = Event.objects.get(id=linimasa_id)
+def get_semua_detail_pilihan_siswa(request, pk):
+    LinimasaObj = Event.objects.get(id=pk)
 
-    PilihanSiswaObj = PilihanSiswa.objects.filter(Event=LinimasaObj)
+    PilihanSiswaObj = PilihanSiswa.objects.filter(event=LinimasaObj)
     data_pilihan = []
     data_matkul = []
     for i in PilihanSiswaObj:
