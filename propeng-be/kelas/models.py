@@ -14,7 +14,7 @@ class Kelas(models.Model):
     isActive = models.BooleanField(default=True)  
     isDeleted = models.BooleanField(default=False)          
     angkatan = models.IntegerField(null=False, blank=False, default=2023)
-    kode = models.CharField(null=True, unique=True, max_length=6, blank=True)
+    kode = models.CharField(null=True, unique=True, max_length=8, blank=True)
     kode_expiry_time = models.DateTimeField(null=True, blank=True)
     waliKelas = models.ForeignKey(
         Teacher,
@@ -42,29 +42,32 @@ class Kelas(models.Model):
         super().save(*args, **kwargs)
 
     def generate_kode(self):
-        """Generate a new kode absen and create or fetch today's AbsensiHarian."""
+        """Generate a new 8-digit alphanumeric kode absen and create or fetch today's AbsensiHarian."""
         today = timezone.now().date()
 
-        # Check if there's an existing AbsensiHarian for today
+        # 1. Ambil atau buat record AbsensiHarian untuk hari ini & kelas ini
         absensi_harian, created = AbsensiHarian.objects.get_or_create(
             date=today, kelas=self
         )
 
-        # Generate a unique random 6-character code
+        # 2. Generate kode unik 8 karakter (MODIFIKASI DI SINI)
         while True:
-            kode = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            # Menggunakan huruf besar (A-Z) dan angka (0-9), panjang 8 karakter
+            kode = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+            # Cek keunikan terhadap field 'kode' di model Kelas
             if not Kelas.objects.filter(kode=kode).exists():
                 break
 
-        # Update the kode and expiry time
+        # 3. Set kode di model Kelas dan AbsensiHarian
         self.kode = kode
         absensi_harian.kode = kode
-        absensi_harian.save()
-        self.kode_expiry_time = timezone.now() + timedelta(seconds=30)  # Set expiry time to 30 seconds from now
-        self.save()
+        absensi_harian.save() # Simpan AbsensiHarian
 
-        return self.kode
-    
+        # 4. Set waktu kedaluwarsa (tetap 30 detik sesuai konteks sebelumnya)
+        self.kode_expiry_time = timezone.now() + timedelta(seconds=30)
+        self.save() # Simpan Kelas (dengan kode baru & expiry time)
+
+        return self.kode # Kembalikan kode yang baru dibuat
     def kode_is_expired(self):
         """Check if the kode absen has expired."""
         return self.kode_expiry_time and timezone.now() > self.kode_expiry_time
