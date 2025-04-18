@@ -121,19 +121,24 @@ def update_nilai(request, nilai_id):
 def drf_error_response(message, http_status=status.HTTP_400_BAD_REQUEST):
     return Response({'message': message, 'error': True}, status=http_status)
 
-# --- View grade_data_view (SETELAH PERUBAHAN) ---
+# --- View grade_data_view (SETELAH PERUBAHAN BESAR) ---
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def grade_data_view(request: Request, matapelajaran_id: int):
     """
-    Handles GET/POST for grade data using the CORRECTED Nilai model.
-    GET: Returns per-component grades separated by type ('initialGrades' and 'initialGrades_keterampilan').
-    POST: Saves/Updates grade for a specific student, component, and scoreType.
+    Handles GET/POST for grade data.
+    GET: Returns students, all components (with type), and a single initialGrades dict.
+    POST: Saves/Updates grade for a specific student and component (type is inherent in component).
     """
     # --- Dapatkan profil Guru & MataPelajaran, Cek Permission (SAMA) ---
     try: requesting_teacher = request.user.teacher
     except (Teacher.DoesNotExist, AttributeError): return drf_error_response("Akses ditolak.", status.HTTP_403_FORBIDDEN)
-    try: matapelajaran = MataPelajaran.objects.select_related('teacher__user', 'tahunAjaran').prefetch_related('siswa_terdaftar', 'komponenpenilaian_matpel').get(id=matapelajaran_id, isDeleted=False, isActive=True)
+    try:
+        # Prefetch komponen penilaian
+        matapelajaran = MataPelajaran.objects.select_related('teacher__user', 'tahunAjaran').prefetch_related(
+            'siswa_terdaftar__user', # Include user relation for student
+            'komponenpenilaian_matpel' # Prefetch components
+        ).get(id=matapelajaran_id, isDeleted=False, isActive=True)
     except MataPelajaran.DoesNotExist: return drf_error_response(f"MatPel tidak ditemukan.", status.HTTP_404_NOT_FOUND)
     if matapelajaran.teacher and matapelajaran.teacher != requesting_teacher: return drf_error_response("Tidak ada izin.", status.HTTP_403_FORBIDDEN)
 
@@ -142,91 +147,81 @@ def grade_data_view(request: Request, matapelajaran_id: int):
     # ==========================
     if request.method == 'GET':
         try:
-            # Ambil siswa & komponen (SAMA)
+            # Ambil siswa (SAMA, pastikan user ada)
             students_queryset = matapelajaran.siswa_terdaftar.filter(isDeleted=False, isActive=True)
             students_list = []
+            student_user_ids_str = [] # Kumpulkan ID string untuk dictionary key
+            student_user_ids_int = [] # Kumpulkan ID int untuk query Nilai
+
             for sp in students_queryset:
-                # Pastikan user relation di Student tidak null
                 if sp.user:
                     k = Kelas.objects.filter(siswa=sp).first()
+                    student_id_str = str(sp.user_id)
                     students_list.append({
-                        "id": str(sp.user_id),
-                        "name": sp.name or sp.user.username, # Fallback ke username jika name null
+                        "id": student_id_str,
+                        "name": sp.name or sp.user.username,
                         "class": k.namaKelas if k else "N/A"
                     })
+                    student_user_ids_str.append(student_id_str)
+                    student_user_ids_int.append(sp.user_id) # ID asli (int/UUID)
                 else:
                     print(f"Warning: Siswa dengan ID {sp.id} tidak memiliki relasi user.")
 
 
+            # Ambil SEMUA komponen penilaian, SERTAKAN TIPE
             assessment_components_qs = matapelajaran.komponenpenilaian_matpel.all()
-            assessment_components_formatted = [{'id': str(c.id), 'name': c.namaKomponen, 'weight': c.bobotKomponen} for c in assessment_components_qs]
+            assessment_components_formatted = [{
+                'id': str(c.id),
+                'name': c.namaKomponen,
+                'weight': c.bobotKomponen,
+                'type': c.tipeKomponen # Sertakan tipe komponen di sini!
+            } for c in assessment_components_qs]
+            component_ids_int = [c.id for c in assessment_components_qs] # ID untuk query
 
-            # --- Ambil initialGrades dengan struktur DUA KEY ---
-            initial_grades_p = {} # Untuk Pengetahuan
-            initial_grades_k = {} # Untuk Keterampilan
+            # --- Ambil initialGrades (SATU DICTIONARY) ---
+            initial_grades = {}
 
             if students_list and assessment_components_formatted:
-                student_user_ids_str = [s['id'] for s in students_list]
-                # Gunakan ID numerik untuk query, tapi string untuk key dict
-                component_ids_int = [c.id for c in assessment_components_qs]
-
-                # --- Inisialisasi kedua dictionary agar semua student/component ada ---
-                for sd in students_list:
-                    sid = sd['id']
-                    initial_grades_p[sid] = {comp['id']: None for comp in assessment_components_formatted}
-                    initial_grades_k[sid] = {comp['id']: None for comp in assessment_components_formatted}
+                # --- Inisialisasi dictionary agar semua student/component ada ---
+                for sid in student_user_ids_str:
+                    initial_grades[sid] = {comp['id']: None for comp in assessment_components_formatted}
                 # --------------------------------------------------------------------
 
-                # Ambil record Nilai yang relevan TERMASUK tipe_nilai
+                # Ambil record Nilai yang relevan (TIDAK PERLU tipe_nilai)
                 nilai_records = Nilai.objects.filter(
-                    student_id__in=student_user_ids_str,
-                    komponen_id__in=component_ids_int # Gunakan ID int untuk query
-                ).values('student_id', 'komponen_id', 'nilai', 'tipe_nilai') # <-- Tambah tipe_nilai
+                    student_id__in=student_user_ids_int, # Query pakai ID asli
+                    komponen_id__in=component_ids_int   # Query pakai ID asli
+                ).values('student_id', 'komponen_id', 'nilai') # Hanya perlu field ini
 
-                # Isi dictionary berdasarkan tipe
+                # Isi dictionary
                 for record in nilai_records:
-                    sid = str(record['student_id'])
-                    cid = str(record['komponen_id']) # Gunakan ID string untuk key dict
-                    tipe = record['tipe_nilai']
+                    sid = str(record['student_id'])  # Key pakai string
+                    cid = str(record['komponen_id']) # Key pakai string
                     score = record['nilai']
                     score_fl = float(score) if score is not None else None
 
-                    # Cek apakah student ID ada di map (harusnya ada dari inisialisasi)
-                    if sid not in initial_grades_p or sid not in initial_grades_k:
-                         print(f"Warning: Student ID {sid} dari Nilai tidak ditemukan di students_list.")
-                         continue # Lewati jika siswa tidak ada dalam daftar kelas ini
-
-                    if tipe == Nilai.PENGETAHUAN:
-                        if cid in initial_grades_p[sid]: # Cek apakah komponen ID valid
-                            initial_grades_p[sid][cid] = score_fl
-                        else:
-                             print(f"Warning: Component ID {cid} untuk Nilai Pengetahuan tidak ditemukan di assessment_components_formatted.")
-                    elif tipe == Nilai.KETERAMPILAN:
-                        if cid in initial_grades_k[sid]: # Cek apakah komponen ID valid
-                             initial_grades_k[sid][cid] = score_fl
-                        else:
-                             print(f"Warning: Component ID {cid} untuk Nilai Keterampilan tidak ditemukan di assessment_components_formatted.")
+                    # Cek apakah student dan komponen ada di map (harusnya ada)
+                    if sid in initial_grades and cid in initial_grades[sid]:
+                        initial_grades[sid][cid] = score_fl
+                    else:
+                         print(f"Warning: Kombinasi Student ID {sid} / Component ID {cid} dari Nilai tidak cocok.")
 
 
             # --- Dapatkan info lain (SAMA) ---
             academic_year_str = "N/A"
             if matapelajaran.tahunAjaran:
-                try: academic_year_str = str(matapelajaran.tahunAjaran.tahunAjaran)
-                except AttributeError: print(f"Warning: Field 'tahunAjaran' tidak ditemukan pada objek TahunAjaran ID {matapelajaran.tahunAjaran_id}"); academic_year_str = f"ID {matapelajaran.tahunAjaran_id}"
-            teacher_name = "" ; teacher_nisp = ""
-            if matapelajaran.teacher:
-                try: teacher_name = str(matapelajaran.teacher.name) if matapelajaran.teacher.name else str(matapelajaran.teacher.user.username) # Fallback ke username
-                except AttributeError: teacher_name = "Error Nama Guru"
-                try: teacher_nisp = str(matapelajaran.teacher.nisp)
-                except AttributeError: teacher_nisp = "Error NISP"
+                 try: academic_year_str = str(matapelajaran.tahunAjaran.tahunAjaran)
+                 except AttributeError: academic_year_str = f"ID {matapelajaran.tahunAjaran_id}" # Fallback
+            teacher_name = matapelajaran.teacher.name if matapelajaran.teacher and matapelajaran.teacher.name else (matapelajaran.teacher.user.username if matapelajaran.teacher else "N/A")
+            teacher_nisp = matapelajaran.teacher.nisp if matapelajaran.teacher else "N/A"
 
-            # --- Susun response_data dengan DUA key nilai ---
+            # --- Susun response_data dengan SATU key nilai & komponen BERTIPE ---
             response_data = {
                 "students": students_list,
-                "assessmentComponents": assessment_components_formatted,
+                "assessmentComponents": assessment_components_formatted, # <-- Kirim ini ke frontend
                 "subjectName": matapelajaran.nama,
-                "initialGrades": initial_grades_p,                # <-- Key untuk Pengetahuan
-                "initialGrades_keterampilan": initial_grades_k,  # <-- Key baru untuk Keterampilan
+                "initialGrades": initial_grades, # <-- Hanya satu dictionary nilai
+                # "initialGrades_keterampilan": initial_grades_k, # <-- HAPUS INI
                 "academicYear": academic_year_str,
                 "teacherName": teacher_name,
                 "teacherNisp": teacher_nisp
@@ -239,20 +234,19 @@ def grade_data_view(request: Request, matapelajaran_id: int):
     # ===========================
     elif request.method == 'POST':
         try:
-            # Parsing & Validasi Input (TAMBAH scoreType)
+            # Parsing & Validasi Input (HAPUS scoreType)
             data = request.data
             student_user_id = data.get('studentId')
             component_id = data.get('componentId')
             score_input = data.get('score')
-            tipe_nilai_input = data.get('scoreType') # <-- Terima tipe nilai
+            # tipe_nilai_input = data.get('scoreType') # <-- HAPUS INI
 
-            # Validasi tipe_nilai_input
-            if not tipe_nilai_input or tipe_nilai_input not in [Nilai.PENGETAHUAN, Nilai.KETERAMPILAN]:
-                 return drf_error_response("Tipe nilai (scoreType='pengetahuan' atau 'keterampilan') tidak valid atau kosong.", status.HTTP_400_BAD_REQUEST)
+            # Validasi tipe_nilai_input SUDAH TIDAK PERLU
+            # if not tipe_nilai_input or tipe_nilai_input not in [Nilai.PENGETAHUAN, Nilai.KETERAMPILAN]: ...
 
-            # Validasi input lain (tambahkan scoreType)
-            if not all(k in data for k in ['studentId', 'componentId', 'score', 'scoreType']) or not student_user_id or not component_id:
-                 return drf_error_response("Data tidak lengkap (membutuhkan studentId, componentId, score, scoreType).", status.HTTP_400_BAD_REQUEST)
+            # Validasi input lain (tanpa scoreType)
+            if not all(k in data for k in ['studentId', 'componentId', 'score']) or not student_user_id or not component_id:
+                 return drf_error_response("Data tidak lengkap (membutuhkan studentId, componentId, score).", status.HTTP_400_BAD_REQUEST)
 
             # Konversi & Validasi Score (SAMA)
             final_score = None
@@ -269,37 +263,38 @@ def grade_data_view(request: Request, matapelajaran_id: int):
             try: komponen = KomponenPenilaian.objects.get(id=str(component_id), mataPelajaran=matapelajaran)
             except KomponenPenilaian.DoesNotExist: return drf_error_response(f"Komponen penilaian tidak valid untuk mata pelajaran ini.", status.HTTP_400_BAD_REQUEST)
 
-            # --- Simpan/Update Nilai (Gunakan tipe_nilai) ---
+            # --- Simpan/Update Nilai (TANPA tipe_nilai) ---
             try:
-                # update_or_create berdasarkan student, komponen, DAN tipe_nilai
+                # update_or_create berdasarkan student dan komponen saja
                 nilai_obj, created = Nilai.objects.update_or_create(
-                    student=student_user,           # Kunci 1: Object User
-                    komponen=komponen,            # Kunci 2: Object KomponenPenilaian
-                    tipe_nilai=tipe_nilai_input,  # <-- Kunci 3: Tipe Nilai dari request
+                    student=student_user,      # Kunci 1: Object User
+                    komponen=komponen,         # Kunci 2: Object KomponenPenilaian
+                    # tipe_nilai=tipe_nilai_input, # <-- HAPUS Kunci 3
                     defaults={'nilai': final_score} # Update field nilai
                 )
                 action = "dibuat" if created else "diperbarui"
                 return Response({ # Gunakan Response DRF
-                    "message": f"Nilai {tipe_nilai_input} untuk komponen '{komponen.namaKomponen}' berhasil {action}.",
+                    "message": f"Nilai untuk komponen '{komponen.namaKomponen}' ({komponen.get_tipeKomponen_display()}) berhasil {action}.", # Sebutkan tipe dari komponen
                     "studentId": str(student_user_id),
                     "componentId": str(component_id),
-                    "scoreType": tipe_nilai_input, # Kembalikan tipe yg disimpan
+                    # "scoreType": tipe_nilai_input, # <-- Hapus dari response
                     'savedScore': float(final_score) if final_score is not None else None
                 }, status=status.HTTP_200_OK)
             # --- AKHIR Simpan ---
             except Exception as e:
-                 print(f"...Error saving Nilai: {e}")
-                 traceback.print_exc() # Cetak traceback untuk debug
-                 return drf_error_response(f"Gagal menyimpan nilai: {e}", status.HTTP_500_INTERNAL_SERVER_ERROR)
+                print(f"...Error saving Nilai: {e}")
+                traceback.print_exc()
+                return drf_error_response(f"Gagal menyimpan nilai: {e}", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         except Exception as e:
             print(f"...Error POST: {e}")
             traceback.print_exc()
             return drf_error_response("Error internal POST.", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 # --- View get_teacher_subjects_summary (SETELAH PERUBAHAN) ---
 @api_view(['GET'])
-@permission_classes([IsAuthenticated]) # Uncomment jika perlu otentikasi
+@permission_classes([IsAuthenticated])
 def get_teacher_subjects_summary(request: Request):
     # ... (Logika get teacher SAMA) ...
     try: logged_in_teacher = request.user.teacher
@@ -310,33 +305,31 @@ def get_teacher_subjects_summary(request: Request):
         active_subjects = MataPelajaran.objects.filter(
             teacher=logged_in_teacher, isDeleted=False, isActive=True
         ).prefetch_related(
-            'komponenpenilaian_matpel', 'siswa_terdaftar__user' # Prefetch user siswa juga
+            'komponenpenilaian_matpel',
+            'siswa_terdaftar__user' # Prefetch user siswa juga
         ).select_related('tahunAjaran', 'teacher__user') # Prefetch user guru
 
         summary_list = []
         for subject in active_subjects:
             components = subject.komponenpenilaian_matpel.all()
-            # Filter siswa terdaftar yang aktif & tidak dihapus
             students_qs = subject.siswa_terdaftar.filter(isActive=True, isDeleted=False)
 
             component_count = components.count()
             total_weight = sum(comp.bobotKomponen for comp in components if comp.bobotKomponen is not None)
             student_count = students_qs.count()
 
-            # Status Awal
-            subject_status = 'Belum Dimulai'
+            subject_status = 'Belum Dimulai' # Status Awal
 
             # Perhitungan Status (SUDAH DISESUAIKAN)
-            # Asumsi setiap komponen idealnya memiliki 2 tipe nilai (P & K)
-            total_possible_entries = student_count * component_count * 2 # <-- Dikalikan 2
+            # Total entri = jumlah siswa * jumlah komponen (TIDAK PERLU * 2)
+            total_possible_entries = student_count * component_count # <--- PERUBAHAN DI SINI
 
             if total_possible_entries > 0 :
-                # Ambil ID user siswa yang valid
-                student_user_ids = [s.user_id for s in students_qs if s.user_id] # Pastikan user_id ada
+                student_user_ids = [s.user_id for s in students_qs if s.user_id]
                 component_ids = components.values_list('id', flat=True)
 
-                if student_user_ids and component_ids: # Hanya query jika ada ID siswa dan komponen
-                    # filled_count tetap menghitung jumlah record Nilai yang ada
+                if student_user_ids and list(component_ids): # Pastikan ada ID siswa dan komponen
+                    # Hitung jumlah record Nilai yang sudah ada
                     filled_count = Nilai.objects.filter(
                         student_id__in=student_user_ids,
                         komponen_id__in=component_ids
@@ -344,26 +337,30 @@ def get_teacher_subjects_summary(request: Request):
 
                     # Logika status menggunakan total_possible_entries yang baru
                     if filled_count == total_possible_entries:
-                         subject_status = 'Terisi Penuh'
+                        subject_status = 'Terisi Penuh'
                     elif filled_count > 0:
-                         subject_status = 'Dalam Proses'
+                        subject_status = 'Dalam Proses'
                     # Jika filled_count == 0, status tetap 'Belum Dimulai'
-                else:
-                     # Jika tidak ada siswa atau komponen, status tetap 'Belum Dimulai'
-                     pass
+                # else: Jika tidak ada siswa atau komponen, status tetap 'Belum Dimulai'
 
+            # Sertakan tipe komponen dalam data komponen jika diperlukan di frontend summary
+            components_data = [{
+                'id': str(comp.id),
+                'name': comp.namaKomponen,
+                'weight': comp.bobotKomponen,
+                'type': comp.tipeKomponen # Bisa ditambahkan jika perlu
+             } for comp in components]
 
-            components_data = [{'id': str(comp.id), 'name': comp.namaKomponen, 'weight': comp.bobotKomponen} for comp in components]
             summary_list.append({
                 "id": str(subject.id),
-                "subjectId": subject.kode, # Asumsi ada field 'kode'
+                "subjectId": subject.kode,
                 "name": subject.nama,
                 "academicYear": str(subject.tahunAjaran.tahunAjaran) if subject.tahunAjaran else "N/A",
                 "totalWeight": total_weight,
                 "componentCount": component_count,
                 "studentCount": student_count,
-                "status": subject_status, # <-- Status yang sudah dihitung
-                "components": components_data
+                "status": subject_status, # <-- Status yang sudah dihitung ulang
+                "components": components_data # <-- Data komponen
             })
 
         return Response(summary_list, status=status.HTTP_200_OK)

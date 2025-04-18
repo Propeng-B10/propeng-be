@@ -1,79 +1,64 @@
-# nilai/models.py (Contoh Lokasi File)
-
 from django.db import models
-from django.conf import settings # Cara standar mengambil model User
-# Pastikan path import KomponenPenilaian benar
+from django.conf import settings
+# Import KomponenPenilaian dari lokasi yang benar
 from komponenpenilaian.models import KomponenPenilaian
 
 class Nilai(models.Model):
-    # --- Pilihan Tipe Nilai ---
-    PENGETAHUAN = 'pengetahuan'
-    KETERAMPILAN = 'keterampilan'
-    TIPE_NILAI_CHOICES = [
-        (PENGETAHUAN, 'Pengetahuan'),
-        (KETERAMPILAN, 'Keterampilan'),
-    ]
-    # --- Akhir Pilihan ---
+    # --- HAPUS Pilihan Tipe Nilai dari sini ---
+    # PENGETAHUAN = 'pengetahuan'
+    # KETERAMPILAN = 'keterampilan'
+    # TIPE_NILAI_CHOICES = [...]
+    # --- Akhir Hapus ---
 
-    # Foreign Key ke User (Siswa) - Gunakan settings.AUTH_USER_MODEL
+    # Foreign Key ke User (Siswa)
     student = models.ForeignKey(
-        settings.AUTH_USER_MODEL, # Lebih baik pakai ini daripada import langsung
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='nilai_siswa' # Nama relasi dari User ke Nilai
+        related_name='nilai_siswa'
     )
 
     # Foreign Key ke Komponen Penilaian
-    # related_name di sini mungkin lebih cocok 'nilai_terkait' atau 'nilai_records'
-    # karena 'nilai_siswa' sudah dipakai dari User
     komponen = models.ForeignKey(
-        KomponenPenilaian, # Langsung referensi ke model yang diimport
-        on_delete=models.CASCADE, # Atau PROTECT jika ingin mencegah penghapusan komponen jika ada nilai
+        KomponenPenilaian,
+        on_delete=models.PROTECT, # PROTECT agar komponen tidak bisa dihapus jika masih ada nilai terkait
         related_name='nilai_records',
-        # null=True & blank=True mungkin tidak diperlukan jika setiap nilai HARUS punya komponen
-        # Hapus jika komponen wajib ada
-        null=True,
-        blank=True
+        null=False, # Nilai harus selalu punya komponen
+        blank=False
     )
 
-    # Field Nilai (bolehin null mungkin oke jika nilai belum diinput)
+    # Field Nilai
     nilai = models.DecimalField(
         max_digits=5, decimal_places=2,
-        null=True, blank=True
+        null=True, blank=True # Boleh null jika belum diisi
     )
 
-    # --- Field Baru untuk Tipe Nilai ---
-    tipe_nilai = models.CharField(
-        max_length=15,
-        choices=TIPE_NILAI_CHOICES,
-        default=PENGETAHUAN,  # Defaultnya Pengetahuan
-        # Tidak perlu null=True atau blank=True karena ada default
-    )
-    # --- Akhir Field Baru ---
+    # --- HAPUS Field tipe_nilai dari sini ---
+    # tipe_nilai = models.CharField(...)
+    # --- Akhir Hapus ---
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # Pastikan hanya ada satu nilai per siswa per komponen PER TIPE NILAI
-        unique_together = ('student', 'komponen', 'tipe_nilai') # Ini kuncinya!
-        ordering = ['student', 'komponen', 'tipe_nilai']
+        # Unique berdasarkan siswa dan komponen saja
+        unique_together = ('student', 'komponen')
+        ordering = ['student', 'komponen']
 
     def __str__(self):
         score_display = str(self.nilai) if self.nilai is not None else "Kosong"
         nama_komponen_display = "N/A"
         nama_matpel_display = "N/A"
+        tipe_komponen_display = "N/A" # Ambil dari komponen
+
         if self.komponen:
             nama_komponen_display = self.komponen.namaKomponen
+            tipe_komponen_display = self.komponen.get_tipeKomponen_display() # Ambil display tipe
             if self.komponen.mataPelajaran:
-                nama_matpel_display = self.komponen.mataPelajaran.nama # Asumsi field 'nama' di MataPelajaran
+                nama_matpel_display = self.komponen.mataPelajaran.nama # Asumsi field 'nama'
 
-        # Dapatkan display name dari tipe_nilai
-        tipe_display = self.get_tipe_nilai_display()
-
-        # Format string termasuk tipe nilai
-        # Ambil username siswa dengan aman
-        student_display = str(self.student) # Default __str__ User atau username
+        student_display = str(self.student)
         if hasattr(self.student, 'username'):
             student_display = self.student.username
 
-        return f"{student_display} - {nama_komponen_display} ({nama_matpel_display}) [{tipe_display}]: {score_display}"
+        # Format string tanpa tipe dari Nilai, tapi dari Komponen
+        return f"{student_display} - {nama_komponen_display} ({nama_matpel_display}) [{tipe_komponen_display}]: {score_display}"
