@@ -438,18 +438,28 @@ def get_semua_detail_pilihan_siswa(request, pk):
     data_matkul = []
     for i in PilihanSiswaObj:
         PilihanSiswaData = ({
-            "id":i.id,
+            "id": i.id,
             "nama_siswa": i.student.username,
-            "id_siswa" : i.student.user_id,
-            "tier1":i.tier1,
-            "tier2":i.tier2,
-            "tier3":i.tier3,
-            "tier4":i.tier4,
-            "statustier1":i.statustier1,
-            "statustier2":i.statustier2,
-            "statustier3":i.statustier3,
-            "statustier4":i.statustier4,
-            "submitted_at":i.submitted_at
+            "id_siswa": i.student.user_id,
+            "tier1": i.tier1,
+            "tier2": i.tier2,
+            "tier3": i.tier3,
+            "tier4": i.tier4,
+            "statustier1": i.statustier1,
+            "statustier2": i.statustier2,
+            "statustier3": i.statustier3,
+            "statustier4": i.statustier4,
+            "submitted_at": i.submitted_at,
+            
+            # Tambahkan nama option berdasarkan relasi event
+            "tier1_nama_option1": i.event.tier1_option1.nama if i.event.tier1_option1 else None,
+            "tier1_nama_option2": i.event.tier1_option2.nama if i.event.tier1_option2 else None,
+            "tier2_nama_option1": i.event.tier2_option1.nama if i.event.tier2_option1 else None,
+            "tier2_nama_option2": i.event.tier2_option2.nama if i.event.tier2_option2 else None,
+            "tier3_nama_option1": i.event.tier3_option1.nama if i.event.tier3_option1 else None,
+            "tier3_nama_option2": i.event.tier3_option2.nama if i.event.tier3_option2 else None,
+            "tier4_nama_option1": i.event.tier4_option1.nama if i.event.tier4_option1 else None,
+            "tier4_nama_option2": i.event.tier4_option2.nama if i.event.tier4_option2 else None,
         })
         data_pilihan.append(PilihanSiswaData)
     return Response({
@@ -469,18 +479,28 @@ def get_detail_pilihan_siswa(request):
     data_pilihan = []
     for i in PilihanSiswaObj:
         PilihanSiswaData = ({
-            "id":i.id,
+            "id": i.id,
             "nama_siswa": i.student.username,
-            "id_siswa" : i.student.user_id,
-            "tier1":i.tier1,
-            "tier2":i.tier2,
-            "tier3":i.tier3,
-            "tier4":i.tier4,
-            "statustier1":i.statustier1,
-            "statustier2":i.statustier2,
-            "statustier3":i.statustier3,
-            "statustier4":i.statustier4,
-            "submitted_at":i.submitted_at
+            "id_siswa": i.student.user_id,
+            "tier1": i.tier1,
+            "tier2": i.tier2,
+            "tier3": i.tier3,
+            "tier4": i.tier4,
+            "statustier1": i.statustier1,
+            "statustier2": i.statustier2,
+            "statustier3": i.statustier3,
+            "statustier4": i.statustier4,
+            "submitted_at": i.submitted_at,
+            
+            # Tambahkan nama option berdasarkan relasi event
+            "tier1_nama_option1": i.event.tier1_option1.nama if i.event.tier1_option1 else None,
+            "tier1_nama_option2": i.event.tier1_option2.nama if i.event.tier1_option2 else None,
+            "tier2_nama_option1": i.event.tier2_option1.nama if i.event.tier2_option1 else None,
+            "tier2_nama_option2": i.event.tier2_option2.nama if i.event.tier2_option2 else None,
+            "tier3_nama_option1": i.event.tier3_option1.nama if i.event.tier3_option1 else None,
+            "tier3_nama_option2": i.event.tier3_option2.nama if i.event.tier3_option2 else None,
+            "tier4_nama_option1": i.event.tier4_option1.nama if i.event.tier4_option1 else None,
+            "tier4_nama_option2": i.event.tier4_option2.nama if i.event.tier4_option2 else None,
         })
         data_pilihan.append(PilihanSiswaData)
     return Response({
@@ -705,3 +725,4 @@ def get_all_tahun_ajaran(request):
             "message": "Data Angkatan",
             "data": data_angkatan
         }, status=status.HTTP_200_OK)
+        
