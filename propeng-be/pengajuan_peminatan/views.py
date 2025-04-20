@@ -168,6 +168,7 @@ def update_pilihan_siswa(request):
     print("🔹 update pilihan siswa")
     try:
         data = request.data
+        note = data.get("note")
         
         pilihan_id = data.get('pilihan_id')
         if not pilihan_id:
@@ -211,6 +212,11 @@ def update_pilihan_siswa(request):
             
         pilihan_siswa.submitted_at = timezone.now()
         
+        if note is not None:
+            pilihan_siswa.note = note
+        else:
+            pilihan_siswa.note = "Tidak ada catatan dari Wali Kelas"
+
         pilihan_siswa.save()
         
         response_data = {
@@ -450,6 +456,7 @@ def get_semua_detail_pilihan_siswa(request, pk):
             "statustier3": i.statustier3,
             "statustier4": i.statustier4,
             "submitted_at": i.submitted_at,
+            "note": i.note,
             
             # Tambahkan nama option berdasarkan relasi event
             "tier1_nama_option1": i.event.tier1_option1.nama if i.event.tier1_option1 else None,
@@ -491,6 +498,7 @@ def get_detail_pilihan_siswa(request):
             "statustier3": i.statustier3,
             "statustier4": i.statustier4,
             "submitted_at": i.submitted_at,
+            "note": i.note,
             
             # Tambahkan nama option berdasarkan relasi event
             "tier1_nama_option1": i.event.tier1_option1.nama if i.event.tier1_option1 else None,
@@ -501,6 +509,16 @@ def get_detail_pilihan_siswa(request):
             "tier3_nama_option2": i.event.tier3_option2.nama if i.event.tier3_option2 else None,
             "tier4_nama_option1": i.event.tier4_option1.nama if i.event.tier4_option1 else None,
             "tier4_nama_option2": i.event.tier4_option2.nama if i.event.tier4_option2 else None,
+
+            "tier1_capacity_option1": i.event.t1o1_capacity,
+            "tier1_capacity_option2": i.event.t1o2_capacity,
+            "tier2_capacity_option1": i.event.t2o1_capacity,
+            "tier2_capacity_option2": i.event.t2o2_capacity,
+            "tier3_capacity_option1": i.event.t3o1_capacity,
+            "tier3_capacity_option2": i.event.t3o2_capacity,
+            "tier4_capacity_option1": i.event.t4o1_capacity,
+            "tier4_capacity_option2": i.event.t4o2_capacity,
+
         })
         data_pilihan.append(PilihanSiswaData)
     return Response({
@@ -645,6 +663,11 @@ def update_pilihan_status(request):
                     }
                 })
         
+        # Tambahkan catatan dari wali kelas
+        note = data.get("note")
+        if note is not None:
+            pilihan_siswa.note = note
+
         # Save changes
         if updated_fields:
             pilihan_siswa.save()
@@ -658,6 +681,7 @@ def update_pilihan_status(request):
                     "student_name": student.username,
                     "updated_fields": updated_fields,
                     "enrollment_results": enrollment_results,
+                    "note": pilihan_siswa.note,
                     "status": {
                         "tier1": pilihan_siswa.statustier1,
                         "tier2": pilihan_siswa.statustier2,
