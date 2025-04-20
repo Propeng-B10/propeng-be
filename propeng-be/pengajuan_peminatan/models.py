@@ -62,5 +62,7 @@ class PilihanSiswa(models.Model):
     statustier4 = models.BooleanField(null=True, blank=True)
     submitted_at = models.DateTimeField(auto_now=True)
 
+    note = models.TextField(null=True, blank=True)
+
 
 
