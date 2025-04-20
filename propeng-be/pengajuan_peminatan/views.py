@@ -457,6 +457,7 @@ def get_semua_detail_pilihan_siswa(request, pk):
             "statustier4": i.statustier4,
             "submitted_at": i.submitted_at,
             "note": i.note,
+            "id_event": i.event.id,
             
             # Tambahkan nama option berdasarkan relasi event
             "tier1_nama_option1": i.event.tier1_option1.nama if i.event.tier1_option1 else None,
@@ -534,7 +535,6 @@ def update_pilihan_status(request):
     print("🔹 update pilihan status - accept/reject")
     try:
         data = request.data
-        
         pilihan_id = data.get('pilihan_id')
         if not pilihan_id:
             return Response({
@@ -542,7 +542,7 @@ def update_pilihan_status(request):
                 "message": "Data tidak lengkap",
                 "error": "pilihan_id wajib diisi"
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
             pilihan_siswa = PilihanSiswa.objects.get(id=pilihan_id)
         except PilihanSiswa.DoesNotExist:
@@ -551,119 +551,57 @@ def update_pilihan_status(request):
                 "message": "Pilihan siswa tidak ditemukan",
                 "error": f"PilihanSiswa dengan ID {pilihan_id} tidak ditemukan"
             }, status=status.HTTP_404_NOT_FOUND)
-        
+
         student = pilihan_siswa.student
         event = pilihan_siswa.event
-        
-        # Process each tier status update
         updated_fields = []
         enrollment_results = []
-        
-        # Tier 1
-        tier1_status = data.get('tier1')
-        if tier1_status is not None:
-            pilihan_siswa.statustier1 = bool(tier1_status)
-            updated_fields.append('tier1')
-            
-            # Determine which MataPelajaran to enroll in
-            if bool(tier1_status) == True:  # Accept - enroll in chosen option
-                matpel = event.tier1_option1 if pilihan_siswa.tier1 == False else event.tier1_option2
+
+        def process_tier(tier_key):
+            status_key = f"{tier_key}"
+            nilai_status = data.get(status_key)
+            if nilai_status is None:
+                return
+
+            # Update status di model
+            setattr(pilihan_siswa, f"status{status_key}", bool(nilai_status))
+            updated_fields.append(status_key)
+
+            # Ambil pilihan lama
+            pilihan_bool = getattr(pilihan_siswa, tier_key)
+            option1 = getattr(event, f"{tier_key}_option1")
+            option2 = getattr(event, f"{tier_key}_option2")
+
+            matpel_lama = option1 if pilihan_bool == False else option2
+
+            for m in [option1, option2]:
+                if m and m.siswa_terdaftar.filter(user_id=student.user_id).exists():
+                    m.siswa_terdaftar.remove(student)
+
+            # Tentukan matpel baru
+            if bool(nilai_status):
+                matpel_baru = matpel_lama  # Diterima → pilihan awal siswa
                 status_text = "Diterima"
-            else:  # Reject - enroll in alternative option
-                matpel = event.tier1_option2 if pilihan_siswa.tier1 == False else event.tier1_option1
+            else:
+                matpel_baru = option2 if pilihan_bool == False else option1  # Ditolak → pilihan alternatif
                 status_text = "Ditolak"
-                
-            # Enroll student in the MataPelajaran
-            if matpel:
-                matpel.siswa_terdaftar.add(student)
+
+            if matpel_baru:
+                matpel_baru.siswa_terdaftar.add(student)
                 enrollment_results.append({
-                    "tier": "tier1",
+                    "tier": tier_key,
                     "status": status_text,
                     "enrolled_in": {
-                        "id": matpel.id,
-                        "nama": matpel.nama
+                        "id": matpel_baru.id,
+                        "nama": matpel_baru.nama
                     }
                 })
-        
-        # Tier 2
-        tier2_status = data.get('tier2')
-        if tier2_status is not None:
-            pilihan_siswa.statustier2 = bool(tier2_status)
-            updated_fields.append('tier2')
-            
-            # Determine which MataPelajaran to enroll in
-            if bool(tier2_status) == True:  # Accept - enroll in chosen option
-                matpel = event.tier2_option1 if pilihan_siswa.tier2 == False else event.tier2_option2
-                status_text = "Diterima"
-            else:  # Reject - enroll in alternative option
-                matpel = event.tier2_option2 if pilihan_siswa.tier2 == False else event.tier2_option1
-                status_text = "Ditolak"
-                
-            # Enroll student in the MataPelajaran
-            if matpel:
-                matpel.siswa_terdaftar.add(student)
-                enrollment_results.append({
-                    "tier": "tier2",
-                    "status": status_text,
-                    "enrolled_in": {
-                        "id": matpel.id,
-                        "nama": matpel.nama
-                    }
-                })
-        
-        # Tier 3
-        tier3_status = data.get('tier3')
-        if tier3_status is not None:
-            pilihan_siswa.statustier3 = bool(tier3_status)
-            updated_fields.append('tier3')
-            
-            # Determine which MataPelajaran to enroll in
-            if bool(tier3_status) == True:  # Accept - enroll in chosen option
-                matpel = event.tier3_option1 if pilihan_siswa.tier3 == False else event.tier3_option2
-                status_text = "Diterima"
-            else:  # Reject - enroll in alternative option
-                matpel = event.tier3_option2 if pilihan_siswa.tier3 == False else event.tier3_option1
-                status_text = "Ditolak"
-                
-            # Enroll student in the MataPelajaran
-            if matpel:
-                matpel.siswa_terdaftar.add(student)
-                enrollment_results.append({
-                    "tier": "tier3",
-                    "status": status_text,
-                    "enrolled_in": {
-                        "id": matpel.id,
-                        "nama": matpel.nama
-                    }
-                })
-        
-        # Tier 4
-        tier4_status = data.get('tier4')
-        if tier4_status is not None:
-            pilihan_siswa.statustier4 = bool(tier4_status)
-            updated_fields.append('tier4')
-            
-            # Determine which MataPelajaran to enroll in
-            if bool(tier4_status) == True:  # Accept - enroll in chosen option
-                matpel = event.tier4_option1 if pilihan_siswa.tier4 == False else event.tier4_option2
-                status_text = "Diterima"
-            else:  # Reject - enroll in alternative option
-                matpel = event.tier4_option2 if pilihan_siswa.tier4 == False else event.tier4_option1
-                status_text = "Ditolak"
-                
-            # Enroll student in the MataPelajaran
-            if matpel:
-                matpel.siswa_terdaftar.add(student)
-                enrollment_results.append({
-                    "tier": "tier4",
-                    "status": status_text,
-                    "enrolled_in": {
-                        "id": matpel.id,
-                        "nama": matpel.nama
-                    }
-                })
-        
-        # Tambahkan catatan dari wali kelas
+
+        # Jalankan untuk tiap tier
+        for tier in ['tier1', 'tier2', 'tier3', 'tier4']:
+            process_tier(tier)
+
+        # Simpan catatan dari wali kelas
         note = data.get("note")
         if note is not None:
             pilihan_siswa.note = note
@@ -671,7 +609,6 @@ def update_pilihan_status(request):
         # Save changes
         if updated_fields:
             pilihan_siswa.save()
-            
             return Response({
                 "status": 200,
                 "message": "Status pilihan siswa berhasil diupdate",
@@ -694,9 +631,9 @@ def update_pilihan_status(request):
             return Response({
                 "status": 400,
                 "message": "Tidak ada perubahan",
-                "error": "Setidaknya satu status tier harus disediakan untuk diupdate"
+                "error": "Setidaknya satu status tier harus diupdate"
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
     except Exception as e:
         return Response({
             "status": 500,
