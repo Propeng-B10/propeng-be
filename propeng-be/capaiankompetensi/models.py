@@ -16,7 +16,7 @@ class CapaianKompetensi(models.Model):
     mata_pelajaran = models.ForeignKey(
         MataPelajaran,
         on_delete=models.CASCADE,
-        related_name="capaiankompetensi"
+        related_name="capaian_kompetensi"
     )
     tipe = models.CharField(
         max_length=20,
