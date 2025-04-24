@@ -94,7 +94,8 @@ INSTALLED_APPS = [
     'komponenpenilaian',
     "corsheaders",
     "rest_framework",
-    "pengajuan_peminatan"
+    "pengajuan_peminatan",
+    "capaiankompetensi"
 
 ]
 
