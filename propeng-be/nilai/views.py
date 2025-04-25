@@ -469,6 +469,11 @@ def get_student_all_grades(request: Request):
 
         # Data tambahan (opsional)
         response_data = {
+            "siswa_info":  {
+                "id": str(student_profile.user_id),
+                "name": student_profile.name or student_profile.user.username,
+                "email": student_profile.user.email
+            },
             "kelas": {
                 "nama": kelas_aktif.namaKelas,
                 "tahun_ajaran": str(kelas_aktif.tahunAjaran),

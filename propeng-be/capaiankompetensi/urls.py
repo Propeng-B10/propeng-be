@@ -16,4 +16,9 @@ urlpatterns = [
          views.capaian_api_view,
          name='api_capaian'
     ),
+    path(
+        'subject/<int:matapelajaran_id>/descriptions/', # Clearer path
+         views.get_capaian_descriptions_for_subject,
+         name='get_capaian_descriptions' # Unique name
+    ),
 ]

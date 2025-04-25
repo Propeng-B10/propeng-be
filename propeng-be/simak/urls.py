@@ -28,4 +28,6 @@ urlpatterns = [
     path('api/komponen/', include('komponenpenilaian.urls')),
     path('api/linimasa/', include('pengajuan_peminatan.urls')),
     path('api/capaiankompetensi/', include('capaiankompetensi.urls')),
+    path('api/komponenpenilaian/', include('komponenpenilaian.urls')),
+    path('api/matapelajaran/', include('matapelajaran.urls')),
 ]

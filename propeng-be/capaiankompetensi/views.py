@@ -1,10 +1,17 @@
 # capaiankompetensi/views.py
 
 import json
+from urllib import response
 from django.http import JsonResponse, HttpResponseNotFound, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db import transaction
+from django.http import JsonResponse
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.request import Request
 
 # Impor model
 from matapelajaran.models import MataPelajaran # SESUAIKAN PATH
@@ -17,7 +24,8 @@ def serialize_capaian_paling_ramping(capaian):
     return {
         'deskripsi': capaian.deskripsi,
     }
-
+def drf_error_response(message, http_status=status.HTTP_400_BAD_REQUEST):
+    return Response({'message': message, 'error': True}, status=http_status)
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
 @transaction.atomic # Pastikan semua operasi (update/create/delete) atomic
@@ -127,3 +135,54 @@ def capaian_api_view(request, mapel_pk):
             'keterampilan': serialize_capaian_paling_ramping(final_keterampilan)
         }
         return JsonResponse(response_data, status=200)
+    
+@api_view(['GET'])
+@permission_classes([IsAuthenticated]) # Keep it simple for now
+def get_capaian_descriptions_for_subject(request: Request, matapelajaran_id: int):
+    """
+    Retrieves the Pengetahuan and Keterampilan competency descriptions
+    for a specific Mata Pelajaran.
+    """
+    try:
+        # 1. Get the Mata Pelajaran object
+        try:
+            mata_pelajaran = MataPelajaran.objects.get(pk=matapelajaran_id)
+        except MataPelajaran.DoesNotExist:
+            return drf_error_response(f"Mata Pelajaran dengan ID {matapelajaran_id} tidak ditemukan.", status.HTTP_404_NOT_FOUND)
+        except ValueError: # Handle non-integer IDs if they somehow get past URLconf
+             return drf_error_response("ID Mata Pelajaran tidak valid.", status.HTTP_400_BAD_REQUEST)
+
+        # Optional: Add permission check - e.g., is student enrolled? is teacher assigned?
+        # For now, just checks authentication.
+
+        # 2. Fetch the related Capaian Kompetensi objects
+        capaian_pengetahuan = CapaianKompetensi.objects.filter(
+            mata_pelajaran=mata_pelajaran,
+            tipe=CapaianKompetensi.PENGETAHUAN
+        ).first() # Get the first (should be only one) or None
+
+        capaian_keterampilan = CapaianKompetensi.objects.filter(
+            mata_pelajaran=mata_pelajaran,
+            tipe=CapaianKompetensi.KETERAMPILAN
+        ).first() # Get the first or None
+
+        # 3. Prepare the response data
+        response_data = {
+            "matapelajaran_id": mata_pelajaran.id,
+            "matapelajaran_nama": mata_pelajaran.nama,
+            "capaian_pengetahuan": capaian_pengetahuan.deskripsi if capaian_pengetahuan else None,
+            "capaian_keterampilan": capaian_keterampilan.deskripsi if capaian_keterampilan else None,
+        }
+
+        return Response({
+            "status": 200,
+            "message": "Capaian kompetensi berhasil diambil.",
+            "data": response_data
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        # Log the error details for debugging
+        print(f"Error fetching capaian kompetensi for subject {matapelajaran_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return drf_error_response("Terjadi kesalahan internal server.", status.HTTP_500_INTERNAL_SERVER_ERROR)
