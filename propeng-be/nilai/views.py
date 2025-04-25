@@ -20,6 +20,8 @@ from komponenpenilaian.models import KomponenPenilaian
 from user.models import Teacher, Student, User
 from nilai.models import Nilai
 from kelas.models import Kelas
+from komponenpenilaian.models import KomponenPenilaian, PENGETAHUAN, KETERAMPILAN
+from collections import defaultdict # Untuk memudahkan pengelompokan
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -369,3 +371,115 @@ def get_teacher_subjects_summary(request: Request):
         print(f"[API GET /api/nilai/subjects/] Error for teacher {logged_in_teacher.user.username}: {e}")
         traceback.print_exc()
         return drf_error_response("Kesalahan Server Internal saat mengambil summary.", http_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- View Baru untuk Siswa Melihat Nilai ---
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_student_all_grades(request: Request):
+    """
+    Mengambil semua nilai (pengetahuan & keterampilan) untuk semua mata pelajaran
+    yang diikuti oleh siswa yang sedang login dalam konteks kelas aktifnya.
+    """
+    try:
+        # 1. Verifikasi User adalah Siswa
+        user = request.user
+        if user.role != 'student':
+            return drf_error_response("Akses ditolak. Hanya untuk siswa.", status.HTTP_403_FORBIDDEN)
+
+        try:
+            student_profile = Student.objects.select_related('user').get(user=user)
+            if not student_profile.isActive or student_profile.isDeleted:
+                 return drf_error_response("Profil siswa tidak aktif.", status.HTTP_403_FORBIDDEN)
+        except Student.DoesNotExist:
+            return drf_error_response("Profil siswa tidak ditemukan.", status.HTTP_404_NOT_FOUND)
+
+        # 2. Cari Kelas Aktif Siswa
+        # Asumsi siswa hanya terdaftar di satu kelas aktif pada satu waktu
+        kelas_aktif = Kelas.objects.filter(
+            siswa=student_profile,
+            isActive=True,
+            isDeleted=False
+        ).select_related('tahunAjaran').order_by('-tahunAjaran__tahunAjaran').first() # Ambil yg terbaru jika ada > 1
+
+        if not kelas_aktif:
+            return drf_error_response("Siswa tidak terdaftar di kelas aktif manapun.", status.HTTP_404_NOT_FOUND)
+        if not kelas_aktif.tahunAjaran:
+             return drf_error_response("Kelas aktif siswa tidak memiliki Tahun Ajaran.", status.HTTP_400_BAD_REQUEST)
+
+
+        # 3. Ambil Semua Nilai Siswa untuk Mata Pelajaran di Kelas Aktif
+        # Filter Nilai berdasarkan student dan komponen yang mata pelajarannya
+        # sesuai dengan tahun ajaran & angkatan kelas aktif siswa
+        # serta siswa terdaftar di matpel tsb.
+        nilai_list = Nilai.objects.filter(
+            student=user,
+            komponen__mataPelajaran__tahunAjaran=kelas_aktif.tahunAjaran,
+            # Optional: Filter berdasarkan angkatan jika relevan dan ada di MataPelajaran
+            # komponen__mataPelajaran__angkatan=kelas_aktif.angkatan,
+            komponen__mataPelajaran__siswa_terdaftar=student_profile, # Pastikan siswa terdaftar di matpel
+            komponen__mataPelajaran__isActive=True, # Hanya dari matpel aktif
+            komponen__mataPelajaran__isDeleted=False
+        ).select_related(
+            'komponen__mataPelajaran', # Untuk dapat nama & kategori matpel
+            'komponen' # Untuk dapat nama & tipe komponen
+        ).order_by(
+            'komponen__mataPelajaran__nama', # Urutkan berdasarkan nama matpel
+            'komponen__tipeKomponen',       # Lalu berdasarkan tipe komponen
+            'komponen__namaKomponen'        # Lalu nama komponen
+        )
+
+        # 4. Strukturisasi Data Hasil
+        # Gunakan defaultdict untuk memudahkan pengelompokan
+        nilai_per_matpel = defaultdict(lambda: {
+            'id': None,
+            'nama': None,
+            'kategori': None,
+            'kode': None,
+            'pengetahuan': [],
+            'keterampilan': []
+        })
+
+        for nilai_record in nilai_list:
+            komponen = nilai_record.komponen
+            matpel = komponen.mataPelajaran
+            matpel_id_str = str(matpel.id) # Gunakan ID sebagai key unik
+
+            # Isi detail matpel jika belum ada
+            if nilai_per_matpel[matpel_id_str]['id'] is None:
+                nilai_per_matpel[matpel_id_str]['id'] = matpel_id_str
+                nilai_per_matpel[matpel_id_str]['nama'] = matpel.nama
+                nilai_per_matpel[matpel_id_str]['kategori'] = matpel.get_kategoriMatpel_display() # Dapatkan display name
+                nilai_per_matpel[matpel_id_str]['kode'] = matpel.kode
+
+            # Siapkan data entri nilai
+            grade_entry = {
+                'komponen': komponen.namaKomponen,
+                'bobot': komponen.bobotKomponen, # Mungkin berguna untuk info
+                'nilai': float(nilai_record.nilai) if nilai_record.nilai is not None else None
+            }
+
+            # Masukkan ke list yang sesuai (Pengetahuan/Keterampilan)
+            if komponen.tipeKomponen == PENGETAHUAN:
+                nilai_per_matpel[matpel_id_str]['pengetahuan'].append(grade_entry)
+            elif komponen.tipeKomponen == KETERAMPILAN:
+                nilai_per_matpel[matpel_id_str]['keterampilan'].append(grade_entry)
+
+        # 5. Konversi hasil ke format list (lebih umum untuk API)
+        final_result = list(nilai_per_matpel.values())
+
+        # Data tambahan (opsional)
+        response_data = {
+            "kelas": {
+                "nama": kelas_aktif.namaKelas,
+                "tahun_ajaran": str(kelas_aktif.tahunAjaran),
+                "angkatan": kelas_aktif.angkatan
+            },
+            "nilai_siswa": final_result
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"Error fetching student grades: {e}")
+        traceback.print_exc()
+        return drf_error_response("Terjadi kesalahan internal saat mengambil data nilai.", status.HTTP_500_INTERNAL_SERVER_ERROR)

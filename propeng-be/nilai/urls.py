@@ -12,4 +12,6 @@ urlpatterns = [
     path('subjects/',
          views.get_teacher_subjects_summary,
          name='teacher_subject_summary_list'),
+    path('student/my-grades/', views.get_student_all_grades, name='get_student_all_grades'),
+
 ] 
