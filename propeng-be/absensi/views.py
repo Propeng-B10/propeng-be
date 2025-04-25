@@ -6,6 +6,12 @@ from user.models import Student
 from rest_framework.decorators import api_view, permission_classes
 import re
 from rest_framework.permissions import IsAuthenticated, BasePermission
+from django.utils import timezone
+from datetime import datetime, date # Import datetime dan date
+from rest_framework.response import Response # Gunakan Response DRF
+from rest_framework import status # Gunakan status codes DRF
+from collections import defaultdict # Untuk menghitung
+
 # Create your views here.
 
 class IsStudentRole(BasePermission):
@@ -355,4 +361,133 @@ def update_student_absensi(request):
             "errorMessage": f"Terjadi kesalahan: {str(e)}"
         }, status=500)
 
+# Class permission IsStudentRole (jika belum ada, tambahkan)
+class IsStudentRole(BasePermission):
+    """
+    Hanya mengizinkan akses untuk user dengan role 'student'.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.role == 'student')
 
+# --- View Baru untuk Rekap Kehadiran Siswa ---
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsStudentRole]) # Hanya siswa yang login
+def get_student_attendance_summary(request):
+    """
+    Mengambil rekap total kehadiran (Hadir, Izin, Sakit, Alfa)
+    untuk siswa yang sedang login, berdasarkan kelas aktifnya.
+    Opsional: filter berdasarkan ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+    """
+    try:
+        user = request.user
+        try:
+            student_profile = Student.objects.select_related('user').get(user=user)
+            if not student_profile.isActive or student_profile.isDeleted:
+                 return Response({
+                    "message": "Profil siswa tidak aktif.",
+                    "error": True
+                 }, status=status.HTTP_403_FORBIDDEN)
+        except Student.DoesNotExist:
+            return Response({
+                "message": "Profil siswa tidak ditemukan.",
+                "error": True
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Cari Kelas Aktif Siswa
+        kelas_aktif = Kelas.objects.filter(
+            siswa=student_profile,
+            isActive=True,
+            isDeleted=False
+        ).order_by('-tahunAjaran__tahunAjaran').first()
+
+        if not kelas_aktif:
+            return Response({
+                "message": "Siswa tidak terdaftar di kelas aktif manapun.",
+                "error": True
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Tentukan Rentang Tanggal
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        start_date = None
+        end_date = None
+        date_filter_applied = False
+
+        try:
+            if start_date_str:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                date_filter_applied = True
+            if end_date_str:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                date_filter_applied = True
+            # Pastikan start_date tidak setelah end_date jika keduanya ada
+            if start_date and end_date and start_date > end_date:
+                raise ValueError("Tanggal mulai tidak boleh setelah tanggal selesai.")
+        except ValueError as e:
+             return Response({
+                "message": f"Format tanggal tidak valid atau rentang tidak benar: {e}. Gunakan format YYYY-MM-DD.",
+                "error": True
+             }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Query AbsensiHarian
+        absensi_query = AbsensiHarian.objects.filter(kelas=kelas_aktif).order_by('date')
+
+        # Terapkan filter tanggal jika ada
+        if start_date:
+            absensi_query = absensi_query.filter(date__gte=start_date)
+        if end_date:
+            absensi_query = absensi_query.filter(date__lte=end_date)
+
+        # Hitung rekap kehadiran
+        # Inisialisasi counter (gunakan defaultdict agar lebih mudah)
+        # Sesuaikan keys dengan status yang MUNGKIN tersimpan di listSiswa
+        # Berdasarkan view update_student_absensi, sepertinya "Sakit" juga valid
+        attendance_summary = defaultdict(int)
+        possible_statuses = ['Hadir', 'Izin', 'Sakit', 'Alfa'] # Status yang akan dihitung
+
+        student_id_str = str(student_profile.user_id) # Gunakan ID sebagai string key
+
+        for record in absensi_query:
+            student_data = record.listSiswa.get(student_id_str) # Coba ambil data siswa
+
+            if student_data:
+                status_siswa = None
+                # Handle format lama (string) dan baru (dict)
+                if isinstance(student_data, dict):
+                    status_siswa = student_data.get('status')
+                elif isinstance(student_data, str): # Fallback untuk format lama
+                    status_siswa = student_data
+
+                # Jika status ditemukan dan valid, increment counter
+                if status_siswa in possible_statuses:
+                    attendance_summary[status_siswa] += 1
+                # Bisa tambahkan logika jika status tidak dikenali, misal menghitung 'Lainnya'
+                # elif status_siswa:
+                #    attendance_summary['Lainnya'] += 1
+
+        # Siapkan data respons
+        summary_data = {status: attendance_summary[status] for status in possible_statuses}
+
+        response_payload = {
+            "status": 200,
+            "message": "Rekap kehadiran berhasil diambil.",
+            "kelas_aktif": kelas_aktif.namaKelas,
+            "siswa": student_profile.name or student_profile.user.username,
+            "periode": {
+                "start_date": start_date_str if start_date else "Awal",
+                "end_date": end_date_str if end_date else "Akhir"
+            },
+            "rekap_kehadiran": summary_data
+        }
+
+        return Response(response_payload, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"Error getting student attendance summary: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response({
+            "message": "Terjadi kesalahan internal saat mengambil rekap kehadiran.",
+            "error": True,
+            "detail": str(e) # Optional: sertakan detail error untuk debugging
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
