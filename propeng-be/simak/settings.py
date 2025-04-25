@@ -9,6 +9,10 @@ https://docs.djangoproject.com/en/5.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
+import os
+from dotenv import load_dotenv
+load_dotenv()
+import dj_database_url
 from pathlib import Path
 import user
 import nilai
@@ -137,9 +141,19 @@ WSGI_APPLICATION = 'simak.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME':'postgres',
+        'USER': 'postgres',
+        'host': 'db.zmjelcnfljwfdwjyyxrn.supabase.co',
+        "port": "5432",
+        'PASSWORD':'murkyeyesz'
+        # password sementara here
     }
+}
+# directing the databases to the supabase one
+
+DATABASES = {
+    'default': dj_database_url.config(default=os.getenv('DATABASE_URL'))
 }
 
 
