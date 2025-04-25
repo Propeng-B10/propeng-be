@@ -1,3 +1,4 @@
+from capaiankompetensi.models import CapaianKompetensi
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -6,7 +7,7 @@ from rest_framework.request import Request
 from .models import Nilai
 from .serializers import NilaiSerializer
 import json
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 import traceback
 from matapelajaran.models import MataPelajaran
 from komponenpenilaian.models import KomponenPenilaian
@@ -372,6 +373,38 @@ def get_teacher_subjects_summary(request: Request):
         traceback.print_exc()
         return drf_error_response("Kesalahan Server Internal saat mengambil summary.", http_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+def calculate_weighted_average(grades_list):
+    """
+    Calculates the weighted average from a list of grade entries.
+    Each entry should be a dictionary like: {'nilai': float/Decimal/None, 'bobot': int/None}
+    """
+    total_weighted_score = Decimal(0)
+    total_weight = Decimal(0)
+
+    for grade_entry in grades_list:
+        nilai = grade_entry.get('nilai')
+        bobot = grade_entry.get('bobot')
+
+        # Only include if nilai is not None and bobot is valid
+        if nilai is not None and isinstance(bobot, (int, float)) and bobot > 0:
+            try:
+                # Ensure nilai is Decimal
+                nilai_decimal = Decimal(str(nilai)) # Convert float/str to Decimal safely
+                bobot_decimal = Decimal(str(bobot))
+                total_weighted_score += nilai_decimal * bobot_decimal
+                total_weight += bobot_decimal
+            except (TypeError, ValueError, InvalidOperation):
+                # Skip if conversion fails
+                print(f"Skipping invalid grade entry for average calculation: {grade_entry}")
+                continue
+
+    if total_weight == 0:
+        return None # No valid weights or grades to calculate average
+
+    # Calculate average and round to 2 decimal places (standard rounding)
+    average = (total_weighted_score / total_weight).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return average
+
 # --- View Baru untuk Siswa Melihat Nilai ---
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -407,79 +440,97 @@ def get_student_all_grades(request: Request):
              return drf_error_response("Kelas aktif siswa tidak memiliki Tahun Ajaran.", status.HTTP_400_BAD_REQUEST)
 
 
-        # 3. Ambil Semua Nilai Siswa untuk Mata Pelajaran di Kelas Aktif
-        # Filter Nilai berdasarkan student dan komponen yang mata pelajarannya
-        # sesuai dengan tahun ajaran & angkatan kelas aktif siswa
-        # serta siswa terdaftar di matpel tsb.
+        # 3. Ambil Semua Nilai Siswa 
         nilai_list = Nilai.objects.filter(
             student=user,
             komponen__mataPelajaran__tahunAjaran=kelas_aktif.tahunAjaran,
-            # Optional: Filter berdasarkan angkatan jika relevan dan ada di MataPelajaran
-            # komponen__mataPelajaran__angkatan=kelas_aktif.angkatan,
-            komponen__mataPelajaran__siswa_terdaftar=student_profile, # Pastikan siswa terdaftar di matpel
-            komponen__mataPelajaran__isActive=True, # Hanya dari matpel aktif
+            komponen__mataPelajaran__siswa_terdaftar=student_profile,
+            komponen__mataPelajaran__isActive=True,
             komponen__mataPelajaran__isDeleted=False
         ).select_related(
-            'komponen__mataPelajaran', # Untuk dapat nama & kategori matpel
-            'komponen' # Untuk dapat nama & tipe komponen
+            'komponen__mataPelajaran',
+            'komponen'
         ).order_by(
-            'komponen__mataPelajaran__nama', # Urutkan berdasarkan nama matpel
-            'komponen__tipeKomponen',       # Lalu berdasarkan tipe komponen
-            'komponen__namaKomponen'        # Lalu nama komponen
+            'komponen__mataPelajaran__nama',
+            'komponen__tipeKomponen',
+            'komponen__namaKomponen'
         )
 
-        # 4. Strukturisasi Data Hasil
-        # Gunakan defaultdict untuk memudahkan pengelompokan
-        nilai_per_matpel = defaultdict(lambda: {
-            'id': None,
-            'nama': None,
-            'kategori': None,
-            'kode': None,
-            'pengetahuan': [],
-            'keterampilan': []
+        # 4. Strukturisasi Data Hasil (Grouping - same as before)
+        nilai_per_matpel_grouped = defaultdict(lambda: {
+            'id': None, 'nama': None, 'kategori': None, 'kode': None,
+            'capaian_pengetahuan': None, 'capaian_keterampilan': None,
+            'pengetahuan': [], 'keterampilan': []
         })
+        processed_matpel_ids = set()
+        
 
         for nilai_record in nilai_list:
             komponen = nilai_record.komponen
             matpel = komponen.mataPelajaran
-            matpel_id_str = str(matpel.id) # Gunakan ID sebagai key unik
+            matpel_id_str = str(matpel.id)
 
-            # Isi detail matpel jika belum ada
-            if nilai_per_matpel[matpel_id_str]['id'] is None:
-                nilai_per_matpel[matpel_id_str]['id'] = matpel_id_str
-                nilai_per_matpel[matpel_id_str]['nama'] = matpel.nama
-                nilai_per_matpel[matpel_id_str]['kategori'] = matpel.get_kategoriMatpel_display() # Dapatkan display name
-                nilai_per_matpel[matpel_id_str]['kode'] = matpel.kode
+            # Fetch Capaian Kompetensi ONCE per subject (same as before)
+            if matpel.id not in processed_matpel_ids:
+                capaian_pengetahuan_desc = None
+                capaian_keterampilan_desc = None
+                capaian_qs = CapaianKompetensi.objects.filter(mata_pelajaran=matpel)
+                for capaian in capaian_qs:
+                    if capaian.tipe == CapaianKompetensi.PENGETAHUAN:
+                        capaian_pengetahuan_desc = capaian.deskripsi
+                    elif capaian.tipe == CapaianKompetensi.KETERAMPILAN:
+                        capaian_keterampilan_desc = capaian.deskripsi
+                nilai_per_matpel_grouped[matpel_id_str]['capaian_pengetahuan'] = capaian_pengetahuan_desc
+                nilai_per_matpel_grouped[matpel_id_str]['capaian_keterampilan'] = capaian_keterampilan_desc
+                processed_matpel_ids.add(matpel.id)
 
-            # Siapkan data entri nilai
+            # Isi detail matpel jika belum ada (same as before)
+            if nilai_per_matpel_grouped[matpel_id_str]['id'] is None:
+                nilai_per_matpel_grouped[matpel_id_str]['id'] = matpel_id_str
+                nilai_per_matpel_grouped[matpel_id_str]['nama'] = matpel.nama
+                nilai_per_matpel_grouped[matpel_id_str]['kategori'] = matpel.get_kategoriMatpel_display()
+                nilai_per_matpel_grouped[matpel_id_str]['kode'] = matpel.kode
+
+            # Siapkan data entri nilai (same as before)
             grade_entry = {
                 'komponen': komponen.namaKomponen,
-                'bobot': komponen.bobotKomponen, # Mungkin berguna untuk info
+                'bobot': komponen.bobotKomponen,
                 'nilai': float(nilai_record.nilai) if nilai_record.nilai is not None else None
             }
 
-            # Masukkan ke list yang sesuai (Pengetahuan/Keterampilan)
+            # Masukkan ke list yang sesuai (same as before)
             if komponen.tipeKomponen == PENGETAHUAN:
-                nilai_per_matpel[matpel_id_str]['pengetahuan'].append(grade_entry)
+                nilai_per_matpel_grouped[matpel_id_str]['pengetahuan'].append(grade_entry)
             elif komponen.tipeKomponen == KETERAMPILAN:
-                nilai_per_matpel[matpel_id_str]['keterampilan'].append(grade_entry)
+                nilai_per_matpel_grouped[matpel_id_str]['keterampilan'].append(grade_entry)
 
-        # 5. Konversi hasil ke format list (lebih umum untuk API)
-        final_result = list(nilai_per_matpel.values())
+       # --- 5. Calculate Averages and Finalize List ---
+        final_result_list = []
+        for subject_data in nilai_per_matpel_grouped.values():
+            # Calculate averages using the helper function
+            rata_rata_p = calculate_weighted_average(subject_data['pengetahuan'])
+            rata_rata_k = calculate_weighted_average(subject_data['keterampilan'])
 
-        # Data tambahan (opsional)
+            # Add averages to the subject dictionary
+            subject_data['rata_rata_pengetahuan'] = float(rata_rata_p) if rata_rata_p is not None else None
+            subject_data['rata_rata_keterampilan'] = float(rata_rata_k) if rata_rata_k is not None else None
+
+            final_result_list.append(subject_data)
+        # --- --- --- --- --- --- --- --- --- --- --- ---
+
+        # 6. Prepare Final Response Data (same structure as before)
         response_data = {
-            "siswa_info":  {
-                "id": str(student_profile.user_id),
-                "name": student_profile.name or student_profile.user.username,
-                "email": student_profile.user.email
+            "siswa_info": {
+                "id": str(user.id),
+                "username": user.username,
+                "nama": student_profile.name or user.username
             },
             "kelas": {
                 "nama": kelas_aktif.namaKelas,
                 "tahun_ajaran": str(kelas_aktif.tahunAjaran),
                 "angkatan": kelas_aktif.angkatan
             },
-            "nilai_siswa": final_result
+            "nilai_siswa": final_result_list # This list now includes averages
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
