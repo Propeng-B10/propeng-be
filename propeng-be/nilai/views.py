@@ -375,11 +375,13 @@ def get_teacher_subjects_summary(request: Request):
 
 def calculate_weighted_average(grades_list):
     """
-    Calculates the weighted average from a list of grade entries.
+    Calculates the SUM of weighted points from a list of grade entries.
+    Result = Sum( individual_score * (component_weight / 100) )
     Each entry should be a dictionary like: {'nilai': float/Decimal/None, 'bobot': int/None}
     """
-    total_weighted_score = Decimal(0)
-    total_weight = Decimal(0)
+    total_points = Decimal(0)
+    # Optional: Keep track if any calculation was actually done
+    calculation_performed = False
 
     for grade_entry in grades_list:
         nilai = grade_entry.get('nilai')
@@ -388,22 +390,30 @@ def calculate_weighted_average(grades_list):
         # Only include if nilai is not None and bobot is valid
         if nilai is not None and isinstance(bobot, (int, float)) and bobot > 0:
             try:
-                # Ensure nilai is Decimal
-                nilai_decimal = Decimal(str(nilai)) # Convert float/str to Decimal safely
+                # Ensure values are Decimal
+                nilai_decimal = Decimal(str(nilai))
                 bobot_decimal = Decimal(str(bobot))
-                total_weighted_score += nilai_decimal * bobot_decimal
-                total_weight += bobot_decimal
+
+                # Calculate points contributed by this component
+                # points = nilai * (bobot / 100)
+                component_points = nilai_decimal * (bobot_decimal / Decimal(100))
+
+                # Add to the total sum
+                total_points += component_points
+                calculation_performed = True # Mark that we added points
+
             except (TypeError, ValueError, InvalidOperation):
                 # Skip if conversion fails
-                print(f"Skipping invalid grade entry for average calculation: {grade_entry}")
+                print(f"Skipping invalid grade entry for point calculation: {grade_entry}")
                 continue
 
-    if total_weight == 0:
-        return None # No valid weights or grades to calculate average
+    # If no valid grades/weights were processed, return None
+    if not calculation_performed:
+        return None
 
-    # Calculate average and round to 2 decimal places (standard rounding)
-    average = (total_weighted_score / total_weight).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    return average
+    # Round the final sum to 2 decimal places (or adjust as needed)
+    final_sum = total_points.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return final_sum
 
 # --- View Baru untuk Siswa Melihat Nilai ---
 @api_view(['GET'])
