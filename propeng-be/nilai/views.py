@@ -294,76 +294,123 @@ def grade_data_view(request: Request, matapelajaran_id: int):
             traceback.print_exc()
             return drf_error_response("Error internal POST.", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# Helper function untuk menentukan status berdasarkan count (DRY - Don't Repeat Yourself)
+def calculate_status(filled_count: int, total_possible: int) -> str:
+    """Menghitung status berdasarkan jumlah terisi dan total kemungkinan."""
+    if total_possible <= 0:
+        return 'Belum Dimulai' # Atau 'Tidak Berlaku' jika 0 komponen/siswa
+    if filled_count == total_possible:
+        return 'Terisi Penuh'
+    elif filled_count > 0:
+        return 'Dalam Proses'
+    else: # filled_count == 0
+        return 'Belum Dimulai'
 
-# --- View get_teacher_subjects_summary (SETELAH PERUBAHAN) ---
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_teacher_subjects_summary(request: Request):
-    # ... (Logika get teacher SAMA) ...
-    try: logged_in_teacher = request.user.teacher
-    except (Teacher.DoesNotExist, AttributeError): return drf_error_response("Akses guru ditolak.", status.HTTP_403_FORBIDDEN)
+    try:
+        logged_in_teacher = request.user.teacher
+    except (Teacher.DoesNotExist, AttributeError):
+        # Menggunakan helper drf_error_response jika ada, jika tidak gunakan Response biasa
+        # return drf_error_response("Akses guru ditolak.", status.HTTP_403_FORBIDDEN)
+        return Response({"message": "Akses guru ditolak."}, status=status.HTTP_403_FORBIDDEN)
 
     print(f"[API GET /api/nilai/subjects/] Fetching summary for teacher: {logged_in_teacher.user.username}")
     try:
         active_subjects = MataPelajaran.objects.filter(
             teacher=logged_in_teacher, isDeleted=False, isActive=True
         ).prefetch_related(
+            # Prefetch komponen penilaian
             'komponenpenilaian_matpel',
-            'siswa_terdaftar__user' # Prefetch user siswa juga
-        ).select_related('tahunAjaran', 'teacher__user') # Prefetch user guru
+             # Prefetch siswa dan user siswa
+            'siswa_terdaftar',
+            'siswa_terdaftar__user'
+        ).select_related('tahunAjaran', 'teacher__user') # Prefetch tahun ajaran dan user guru
 
         summary_list = []
         for subject in active_subjects:
-            components = subject.komponenpenilaian_matpel.all()
+            # Ambil komponen dari hasil prefetch
+            components = list(subject.komponenpenilaian_matpel.all()) # Ubah ke list agar bisa difilter ulang
+            # Ambil siswa dari hasil prefetch, filter lagi yang aktif
             students_qs = subject.siswa_terdaftar.filter(isActive=True, isDeleted=False)
 
-            component_count = components.count()
-            total_weight = sum(comp.bobotKomponen for comp in components if comp.bobotKomponen is not None)
             student_count = students_qs.count()
+            student_user_ids = [s.user_id for s in students_qs if s.user_id] # Ambil ID user siswa
 
-            subject_status = 'Belum Dimulai' # Status Awal
+            # Pisahkan komponen berdasarkan tipe
+            pengetahuan_components = [comp for comp in components if comp.tipeKomponen == 'Pengetahuan']
+            keterampilan_components = [comp for comp in components if comp.tipeKomponen == 'Keterampilan']
 
-            # Perhitungan Status (SUDAH DISESUAIKAN)
-            # Total entri = jumlah siswa * jumlah komponen (TIDAK PERLU * 2)
-            total_possible_entries = student_count * component_count # <--- PERUBAHAN DI SINI
+            # --- Hitung Status Pengetahuan ---
+            pengetahuan_comp_count = len(pengetahuan_components)
+            pengetahuan_comp_ids = [comp.id for comp in pengetahuan_components]
+            total_possible_pengetahuan = student_count * pengetahuan_comp_count
+            filled_pengetahuan_count = 0
+            if total_possible_pengetahuan > 0 and student_user_ids and pengetahuan_comp_ids:
+                 filled_pengetahuan_count = Nilai.objects.filter(
+                     student_id__in=student_user_ids,
+                     komponen_id__in=pengetahuan_comp_ids
+                 ).count()
+            status_pengetahuan = calculate_status(filled_pengetahuan_count, total_possible_pengetahuan)
+            # --- Akhir Hitung Status Pengetahuan ---
 
-            if total_possible_entries > 0 :
-                student_user_ids = [s.user_id for s in students_qs if s.user_id]
-                component_ids = components.values_list('id', flat=True)
+            # --- Hitung Status Keterampilan ---
+            keterampilan_comp_count = len(keterampilan_components)
+            keterampilan_comp_ids = [comp.id for comp in keterampilan_components]
+            total_possible_keterampilan = student_count * keterampilan_comp_count
+            filled_keterampilan_count = 0
+            if total_possible_keterampilan > 0 and student_user_ids and keterampilan_comp_ids:
+                 filled_keterampilan_count = Nilai.objects.filter(
+                     student_id__in=student_user_ids,
+                     komponen_id__in=keterampilan_comp_ids
+                 ).count()
+            status_keterampilan = calculate_status(filled_keterampilan_count, total_possible_keterampilan)
+            # --- Akhir Hitung Status Keterampilan ---
 
-                if student_user_ids and list(component_ids): # Pastikan ada ID siswa dan komponen
-                    # Hitung jumlah record Nilai yang sudah ada
-                    filled_count = Nilai.objects.filter(
-                        student_id__in=student_user_ids,
-                        komponen_id__in=component_ids
-                    ).count()
+            # --- Hitung Status Keseluruhan (Opsional, tapi diminta dipertahankan) ---
+            all_comp_count = len(components)
+            all_comp_ids = [comp.id for comp in components]
+            total_possible_overall = student_count * all_comp_count
+            filled_overall_count = 0
+            # Kita bisa menjumlahkan filled_pengetahuan_count + filled_keterampilan_count
+            # JIKA DIJAMIN tidak ada tipe komponen lain. Lebih aman query ulang jika ada kemungkinan tipe lain.
+            # Asumsi hanya ada Pengetahuan & Keterampilan untuk efisiensi:
+            # filled_overall_count = filled_pengetahuan_count + filled_keterampilan_count
+            # Jika ingin lebih aman (menghitung semua tipe):
+            if total_possible_overall > 0 and student_user_ids and all_comp_ids:
+                 filled_overall_count = Nilai.objects.filter(
+                     student_id__in=student_user_ids,
+                     komponen_id__in=all_comp_ids
+                 ).count()
+            status_overall = calculate_status(filled_overall_count, total_possible_overall)
+            # --- Akhir Hitung Status Keseluruhan ---
 
-                    # Logika status menggunakan total_possible_entries yang baru
-                    if filled_count == total_possible_entries:
-                        subject_status = 'Terisi Penuh'
-                    elif filled_count > 0:
-                        subject_status = 'Dalam Proses'
-                    # Jika filled_count == 0, status tetap 'Belum Dimulai'
-                # else: Jika tidak ada siswa atau komponen, status tetap 'Belum Dimulai'
 
-            # Sertakan tipe komponen dalam data komponen jika diperlukan di frontend summary
+            # Kalkulasi total bobot (tidak berubah)
+            total_weight = sum(comp.bobotKomponen for comp in components if comp.bobotKomponen is not None)
+
+            # Siapkan data komponen untuk response (tidak berubah)
             components_data = [{
                 'id': str(comp.id),
                 'name': comp.namaKomponen,
                 'weight': comp.bobotKomponen,
-                'type': comp.tipeKomponen # Bisa ditambahkan jika perlu
+                'type': comp.tipeKomponen
              } for comp in components]
 
+            # Bangun dictionary response
             summary_list.append({
                 "id": str(subject.id),
-                "subjectId": subject.kode,
+                "subjectId": subject.kode, # Pastikan field 'kode' ada di model MataPelajaran
                 "name": subject.nama,
                 "academicYear": str(subject.tahunAjaran.tahunAjaran) if subject.tahunAjaran else "N/A",
-                "totalWeight": total_weight,
-                "componentCount": component_count,
+                "totalWeight": total_weight,          # Bobot total semua komponen
+                "componentCount": all_comp_count,     # Jumlah total semua komponen
                 "studentCount": student_count,
-                "status": subject_status, # <-- Status yang sudah dihitung ulang
-                "components": components_data # <-- Data komponen
+                "status": status_overall,             # Status Keseluruhan (lama)
+                "statusPengetahuan": status_pengetahuan, # Status Baru: Pengetahuan
+                "statusKeterampilan": status_keterampilan, # Status Baru: Keterampilan
+                "components": components_data         # Daftar komponen
             })
 
         return Response(summary_list, status=status.HTTP_200_OK)
@@ -371,7 +418,10 @@ def get_teacher_subjects_summary(request: Request):
     except Exception as e:
         print(f"[API GET /api/nilai/subjects/] Error for teacher {logged_in_teacher.user.username}: {e}")
         traceback.print_exc()
-        return drf_error_response("Kesalahan Server Internal saat mengambil summary.", http_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # Menggunakan helper drf_error_response jika ada, jika tidak gunakan Response biasa
+        # return drf_error_response("Kesalahan Server Internal saat mengambil summary.", http_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"message": "Kesalahan Server Internal saat mengambil summary."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 def calculate_weighted_average(grades_list):
     """
