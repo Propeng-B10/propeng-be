@@ -7,57 +7,135 @@ from .models import *
 from user.models import User
 from django.db import connection
 from django.core.exceptions import ValidationError
-from django.utils import timezone
+from datetime import datetime, timedelta
 from django.db.models import Q
+from django.utils import timezone
 
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_event(request):
-    print("error disini")
-    print(request)
     print("🔹 create event")
-    data = request.data
-    print(data)
-    startdate = data.get('start_date')
-    enddate = data.get('end_date')
-    angkatan = data.get('angkatan')
-    idid_matpel = data.get('matpels')
-    # ekspektasinya, isi dari idid matpel ini berupa list id, dari t1o1 sampai t4o2
-    # berupa [1,2,3,4,...,8] 
-    angkatan = Angkatan.objects.get(id=angkatan)
+    print("create event")
+    try:
+        data = request.data
+        startdate = data.get('start_date')
+        enddate = data.get('end_date')
+        angkatan_id = data.get('angkatan')
+        idid_matpel = data.get('matpels')
+        capaciti_matpel = data.get('capacity')
+        
+        # Validasi data yang diperlukan
+        if not all([startdate, enddate, angkatan_id, idid_matpel, capaciti_matpel]):
+            return Response({
+                "status": 400,
+                "message": "Data tidak lengkap",
+                "error": "Tanggal mulai, tanggal selesai, angkatan, matpels, dan capacity harus diisi"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Periksa apakah angkatan sudah memiliki event
+        try:
+            angkatan = Angkatan.objects.get(id=angkatan_id)
+            
+            # Cek apakah angkatan sudah memiliki event
+            existing_event = Event.objects.filter(angkatan=angkatan).first()
+            print(existing_event)
+            if existing_event:
+                return Response({
+                    "status": 400,
+                    "message": "Angkatan sudah memiliki event",
+                    "error": f"Angkatan {angkatan.angkatan} sudah terdaftar pada event dengan ID {existing_event.id}"
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Angkatan.DoesNotExist:
+            return Response({
+                "status": 404,
+                "message": "Angkatan tidak ditemukan",
+                "error": f"Angkatan dengan ID {angkatan_id} tidak ditemukan"
+            }, status=status.HTTP_404_NOT_FOUND)
+            
+        # Validasi tanggal
+        if startdate > enddate:
+            return Response({
+                "status": 400,
+                "message": "Tanggal tidak valid",
+                "error": "Tanggal mulai harus lebih awal dari tanggal selesai"
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Validasi jumlah matpels dan capacity
+        if len(idid_matpel) != 8 or len(capaciti_matpel) != 8:
+            return Response({
+                "status": 400,
+                "message": "Data tidak valid",
+                "error": "Harus ada 8 mata pelajaran dan 8 nilai kapasitas"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validasi capacity (harus lebih dari 0)
+        for i in range(len(capaciti_matpel)):
+            capaciti_matpel[i] = int(capaciti_matpel[i])
+            if capaciti_matpel[i] <= 0:
+                return Response({
+                    "status": 400,
+                    "message": "Kapasitas tidak valid",
+                    "error": "Semua nilai kapasitas harus lebih besar dari 0"
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        # Dapatkan objek mata pelajaran
+        matpelObj = []
+        for i in idid_matpel:
+            try:
+                matpel = MataPelajaran.objects.get(id=int(i))
+                matpelObj.append(matpel)
+            except MataPelajaran.DoesNotExist:
+                return Response({
+                    "status": 404,
+                    "message": "Mata pelajaran tidak ditemukan",
+                    "error": f"Mata pelajaran dengan ID {i} tidak ditemukan"
+                }, status=status.HTTP_404_NOT_FOUND)
 
-    capaciti_matpel = data.get('capacity')
-    # ekspektasinya, isi dari capacity ini jg mirip, berupa list capacity int, dari t1o1 sampai t4o2
-    # berupa [1,2,3,4, dst] 
-    for i in capaciti_matpel:
-        i = int(i)
-    matpelObj = []
-    for i in idid_matpel:
-        matpel = MataPelajaran.objects.get(id=int(i))
-        matpelObj.append(matpel)
-
-    event = Event.objects.create(start_date=startdate,end_date=enddate,angkatan=angkatan,
-                                 tier1_option1=matpelObj[0],tier1_option2=matpelObj[1],
-                                 tier2_option1=matpelObj[2],tier2_option2=matpelObj[3],
-                                 tier3_option1=matpelObj[4],tier3_option2=matpelObj[5],
-                                 tier4_option1=matpelObj[6],tier4_option2=matpelObj[7],
-                                 t1o1_capacity=capaciti_matpel[0], t1o2_capacity=capaciti_matpel[1],
-                                 t2o1_capacity=capaciti_matpel[2], t2o2_capacity=capaciti_matpel[3],
-                                 t3o1_capacity=capaciti_matpel[4], t3o2_capacity=capaciti_matpel[5],
-                                 t4o1_capacity=capaciti_matpel[6], t4o2_capacity=capaciti_matpel[7])
-    data_event = {
-        "start_date" : event.start_date,
-        "end_date" : event.end_date,
-        "angkatan" : f"angkatan {event.angkatan}"
-    }
-    
-    return Response({
-                "status": 201,
-                "message": "Event berhasil dibuat dengan sukses!",
-                "data": data_event
-            }, status=status.HTTP_201_CREATED)
+        # Buat event baru
+        event = Event.objects.create(
+            start_date=startdate,
+            end_date=enddate,
+            angkatan=angkatan,
+            tier1_option1=matpelObj[0],
+            tier1_option2=matpelObj[1],
+            tier2_option1=matpelObj[2],
+            tier2_option2=matpelObj[3],
+            tier3_option1=matpelObj[4],
+            tier3_option2=matpelObj[5],
+            tier4_option1=matpelObj[6],
+            tier4_option2=matpelObj[7],
+            t1o1_capacity=capaciti_matpel[0], 
+            t1o2_capacity=capaciti_matpel[1],
+            t2o1_capacity=capaciti_matpel[2], 
+            t2o2_capacity=capaciti_matpel[3],
+            t3o1_capacity=capaciti_matpel[4], 
+            t3o2_capacity=capaciti_matpel[5],
+            t4o1_capacity=capaciti_matpel[6], 
+            t4o2_capacity=capaciti_matpel[7]
+        )
+        
+        data_event = {
+            "id": event.id,
+            "start_date": event.start_date,
+            "end_date": event.end_date,
+            "angkatan": f"angkatan {event.angkatan.angkatan}"
+        }
+        
+        return Response({
+            "status": 201,
+            "message": "Event berhasil dibuat dengan sukses!",
+            "data": data_event
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": "Terjadi kesalahan",
+            "error": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -411,7 +489,108 @@ def get_all_events(request):
             }
             
             # Add status based on current date
-            current_date = timezone.now().date()
+            print("start")
+            print("disini loh\n\n\n\n")
+            current_date = datetime.now()
+            current_date = current_date + timedelta(hours=7)
+            print("stop")
+            print(datetime.now().date())
+            current_date = current_date.date()
+            if current_date < event.start_date:
+                event_data["status"] = "akan_datang"
+            elif current_date <= event.end_date:
+                event_data["status"] = "aktif"
+            else:
+                event_data["status"] = "telah_berakhir"
+                
+            events_data.append(event_data)
+        
+        return Response({
+            "status": 200,
+            "message": "Daftar event berhasil diambil",
+            "data": events_data
+        }, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": "Terjadi kesalahan",
+            "error": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_event(request, pk):
+    print("🔹 get specific linimasa")
+    try:
+        events = Event.objects.filter(id=pk).order_by('-start_date')
+        
+        events_data = []
+        for event in events:
+            # Get count of students who have submitted choices for this event
+            submissions_count = PilihanSiswa.objects.filter(event=event).count()
+            
+            event_data = {
+                "id": event.id,
+                "start_date": event.start_date,
+                "end_date": event.end_date,
+                "angkatan": event.angkatan.id if event.angkatan else None,
+                "created_at": event.createdAt,
+                "updated_at": event.updatedAt,
+                "submissions_count": submissions_count,
+                "tahun_ajaran" : event.tier1_option1.tahunAjaran.id,
+                "matpel": {
+                    "tier1_option1": {
+                        "id": event.tier1_option1.id if event.tier1_option1 else None,
+                        "nama": event.tier1_option1.nama if event.tier1_option1 else None,
+                        "capacity": event.t1o1_capacity
+                    },
+                    "tier1_option2": {
+                        "id": event.tier1_option2.id if event.tier1_option2 else None,
+                        "nama": event.tier1_option2.nama if event.tier1_option2 else None,
+                        "capacity": event.t1o2_capacity
+                    },
+                    "tier2_option1": {
+                        "id": event.tier2_option1.id if event.tier2_option1 else None,
+                        "nama": event.tier2_option1.nama if event.tier2_option1 else None,
+                        "capacity": event.t2o1_capacity
+                    },
+                    "tier2_option2": {
+                        "id": event.tier2_option2.id if event.tier2_option2 else None,
+                        "nama": event.tier2_option2.nama if event.tier2_option2 else None,
+                        "capacity": event.t2o2_capacity
+                    },
+                    "tier3_option1": {
+                        "id": event.tier3_option1.id if event.tier3_option1 else None,
+                        "nama": event.tier3_option1.nama if event.tier3_option1 else None,
+                        "capacity": event.t3o1_capacity
+                    },
+                    "tier3_option2": {
+                        "id": event.tier3_option2.id if event.tier3_option2 else None,
+                        "nama": event.tier3_option2.nama if event.tier3_option2 else None,
+                        "capacity": event.t3o2_capacity
+                    },
+                    "tier4_option1": {
+                        "id": event.tier4_option1.id if event.tier4_option1 else None,
+                        "nama": event.tier4_option1.nama if event.tier4_option1 else None,
+                        "capacity": event.t4o1_capacity
+                    },
+                    "tier4_option2": {
+                        "id": event.tier4_option2.id if event.tier4_option2 else None,
+                        "nama": event.tier4_option2.nama if event.tier4_option2 else None,
+                        "capacity": event.t4o2_capacity
+                    }
+                }
+            }
+            
+            # Add status based on current date
+            print("start")
+            print("disini loh\n\n\n\n")
+            current_date = datetime.now()
+            current_date = current_date + timedelta(hours=7)
+            print("stop")
+            print(datetime.now().date())
+            current_date = current_date.date()
             if current_date < event.start_date:
                 event_data["status"] = "akan_datang"
             elif current_date <= event.end_date:
@@ -644,7 +823,7 @@ def update_pilihan_status(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_all_angkatan(request):
-    all_angkatan = Angkatan.objects.all()
+    all_angkatan = Angkatan.objects.filter(student__isnull=False).distinct()
     data_angkatan = []
     for i in all_angkatan:
         data_angkatan_temp = {
@@ -673,17 +852,155 @@ def delete_linimasa(request,pk):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_all_tahun_ajaran(request):
-    all_angkatan = TahunAjaran.objects.all()
-    data_angkatan = []
-    for i in all_angkatan:
+    get_all_tahun_ajaran = TahunAjaran.objects.filter(matapelajaran__isnull=False).distinct()
+
+    data_tahunajaran = []
+    for i in get_all_tahun_ajaran:
         data_angkatan_temp = {
-            "id":i.id,
-            "tahunAjaran":i.tahunAjaran
+            "id": i.id,
+            "tahunAjaran": i.tahunAjaran
         }
-        data_angkatan.append(data_angkatan_temp)
+        data_tahunajaran.append(data_angkatan_temp)
+
     return Response({
+        "status": 200,
+        "message": "Data Tahun Ajaran",
+        "data": data_tahunajaran
+    }, status=status.HTTP_200_OK)
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_event(request):
+    print("🔹 update event")
+    try:
+        data = request.data
+        print(data)
+        
+        # Get event ID
+        event_id = data.get('id')
+        if not event_id:
+            return Response({
+                "status": 400,
+                "message": "Data tidak lengkap",
+                "error": "ID event wajib diisi"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if event exists
+        try:
+            event = Event.objects.get(id=event_id)
+        except Event.DoesNotExist:
+            return Response({
+                "status": 404,
+                "message": "Event tidak ditemukan",
+                "error": f"Event dengan ID {event_id} tidak ditemukan"
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get update data
+        startdate = data.get('start_date', event.start_date)
+        enddate = data.get('end_date', event.end_date)
+        angkatan = data.get('angkatan')
+        idid_matpel = data.get('matpels')
+        capaciti_matpel = data.get('capacity')
+        
+        # Update angkatan if provided
+        if angkatan:
+            try:
+                angkatan_obj = Angkatan.objects.get(id=angkatan)
+                # Check if this would conflict with another event
+                existing_events = Event.objects.filter(
+                    ~Q(id=event_id) & (Q(angkatan=angkatan_obj))
+                )
+                print(existing_events)
+                if existing_events.exists():
+                    print("kerun kok1")
+                    print(existing_events.first().id)
+                    if existing_events.first().id == data.id:
+                        print("kerun kok pass")
+                        pass
+                    else:
+                        return Response({
+                            "status": 400,
+                            "message": "Angkatan sudah memiliki event",
+                            "error": f"Angkatan {angkatan} sudah terdaftar pada event lain (ID: {existing_events.first().id})"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    print("kerun kok")
+                event.angkatan11 = angkatan_obj
+            except Angkatan.DoesNotExist:
+                return Response({
+                    "status": 404,
+                    "message": "Angkatan tidak ditemukan",
+                    "error": f"Angkatan {angkatan} tidak ditemukan"
+                }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Update dates
+        event.start_date = startdate
+        event.end_date = enddate
+        
+        # Update matpel and capacity if provided
+        if idid_matpel and capaciti_matpel and len(idid_matpel) == 8 and len(capaciti_matpel) == 8:
+            # Validate capacity values
+            for i in range(len(capaciti_matpel)):
+                capaciti_matpel[i] = int(capaciti_matpel[i])
+                if capaciti_matpel[i] <= 0:
+                    return Response({
+                        "status": 400,
+                        "message": "Kapasitas tidak valid",
+                        "error": "Semua nilai kapasitas harus lebih besar dari 0"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get matpel objects
+            matpelObj = []
+            for i in idid_matpel:
+                try:
+                    matpel = MataPelajaran.objects.get(id=int(i))
+                    matpelObj.append(matpel)
+                except MataPelajaran.DoesNotExist:
+                    return Response({
+                        "status": 404,
+                        "message": "Mata pelajaran tidak ditemukan",
+                        "error": f"Mata pelajaran dengan ID {i} tidak ditemukan"
+                    }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Update event with new matpel and capacity values
+            event.tier1_option1 = matpelObj[0]
+            event.tier1_option2 = matpelObj[1]
+            event.tier2_option1 = matpelObj[2]
+            event.tier2_option2 = matpelObj[3]
+            event.tier3_option1 = matpelObj[4]
+            event.tier3_option2 = matpelObj[5]
+            event.tier4_option1 = matpelObj[6]
+            event.tier4_option2 = matpelObj[7]
+            
+            event.t1o1_capacity = capaciti_matpel[0]
+            event.t1o2_capacity = capaciti_matpel[1]
+            event.t2o1_capacity = capaciti_matpel[2]
+            event.t2o2_capacity = capaciti_matpel[3]
+            event.t3o1_capacity = capaciti_matpel[4]
+            event.t3o2_capacity = capaciti_matpel[5]
+            event.t4o1_capacity = capaciti_matpel[6]
+            event.t4o2_capacity = capaciti_matpel[7]
+        
+        # Save updated event
+        event.save()
+        
+        data_event = {
+            "id": event.id,
+            "start_date": event.start_date,
+            "end_date": event.end_date,
+            "angkatan": f"Event dengan angkatan {angkatan} Berhasil diperbarui",
+            "updated_at": event.updatedAt
+        }
+        
+        return Response({
             "status": 200,
-            "message": "Data Angkatan",
-            "data": data_angkatan
+            "message": "Event berhasil diperbarui",
+            "data": data_event
         }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            "status": 500,
+            "message": "Terjadi kesalahan",
+            "error": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
