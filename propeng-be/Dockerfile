@@ -9,7 +9,7 @@ COPY . .
 
 # Install dependencies
 RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+RUN pip install -r requirements2.txt
 
 # Expose the port Django runs on
 EXPOSE 8000
