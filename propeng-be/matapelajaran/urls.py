@@ -10,3 +10,4 @@ urlpatterns = [
     path('by-teacher/<int:pk>/', get_mata_pelajaran_by_teacher_id, name='get_mata_pelajaran_by_teacher_id'),
     path('tahun-ajaran/<int:pk>/', list_matapelajaran_minat_by_tahunajaran, name="minat_by_tahun_ajaran")
 ]
+# test
