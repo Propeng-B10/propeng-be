@@ -13,6 +13,5 @@ urlpatterns = [
     path('angkatan/', get_all_angkatan, name='angkatan'),
     path('tahun-ajaran/', get_all_tahun_ajaran, name="tahun_ajaran"),
     path('delete/<int:pk>', delete_linimasa, name="hapus"),
-    path('<int:pk>/', get_event, name="get_event"),
-    path('matpel/<int:pk>/', get_matpels, name="get_matpels")
+    path('<int:pk>/', get_event, name="get_event")
 ]
