@@ -302,7 +302,7 @@ def get_mata_pelajaran_by_teacher_id(request, pk):
 def list_matapelajaran_minat_by_tahunajaran(request, pk):
     """List all mata pelajaran, including both archived and active"""
     try:
-        matapelajaran = MataPelajaran.objects.filter(isDeleted=False, tahunAjaran=pk)
+        matapelajaran = MataPelajaran.objects.filter(isDeleted=False, tahunAjaran=pk, kategoriMatpel="Peminatan")
         matapelajaran_list = []
         
         for mapel in matapelajaran:
