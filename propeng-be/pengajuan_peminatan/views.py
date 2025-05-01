@@ -38,14 +38,14 @@ def create_event(request):
         try:
             angkatan = Angkatan.objects.get(id=angkatan_id)
             
-            # Cek apakah angkatan sudah memiliki event
-            existing_event = Event.objects.filter(angkatan=angkatan).first()
+            # Cek apakah angkatan sudah memiliki event yang masih aktif
+            existing_event = Event.objects.filter(angkatan=angkatan, end_date__gte=timezone.now()).first()
             print(existing_event)
             if existing_event:
                 return Response({
                     "status": 400,
-                    "message": "Angkatan sudah memiliki event",
-                    "error": f"Angkatan {angkatan.angkatan} sudah terdaftar pada event dengan ID {existing_event.id}"
+                    "message": "Angkatan sudah memiliki seleksi yang aktif",
+                    "error": f"Angkatan {angkatan.angkatan} sudah terdaftar pada seleksi dengan ID {existing_event.id} yang masih aktif"
                 }, status=status.HTTP_400_BAD_REQUEST)
                 
         except Angkatan.DoesNotExist:
@@ -126,7 +126,7 @@ def create_event(request):
         
         return Response({
             "status": 201,
-            "message": "Event berhasil dibuat dengan sukses!",
+            "message": "Seleksi berhasil dibuat dengan sukses!",
             "data": data_event
         }, status=status.HTTP_201_CREATED)
         
@@ -136,7 +136,6 @@ def create_event(request):
             "message": "Terjadi kesalahan",
             "error": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 
 @api_view(['POST'])
