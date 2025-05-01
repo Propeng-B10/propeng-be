@@ -65,6 +65,9 @@ class Kelas(models.Model):
 
         # 4. Set waktu kedaluwarsa (tetap 30 detik sesuai konteks sebelumnya)
         self.kode_expiry_time = timezone.now() + timedelta(seconds=30)
+        ## Set refresh celery after 30s
+        
+        # 5. Simpan kode di model Kelas
         self.save() # Simpan Kelas (dengan kode baru & expiry time)
 
         return self.kode # Kembalikan kode yang baru dibuat
@@ -73,9 +76,13 @@ class Kelas(models.Model):
         return self.kode_expiry_time and timezone.now() > self.kode_expiry_time
 
     def check_kode(self, kode_absen):
+        
         print(self.kode)
         print("disisni")
         print(kode_absen)
+        if self.kode_is_expired():
+            return "Gagal"
+        # Cek apakah kode yang dimasukkan sama dengan kode yang ada di kelas
         if self.kode != kode_absen:
             return "Gagal"
         return "Berhasil"
