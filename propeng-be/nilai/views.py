@@ -583,10 +583,13 @@ def get_student_all_grades(request: Request):
             "siswa_info": {
                 "id": str(user.id),
                 "username": user.username,
+                "nisn": student_profile.nisn if student_profile.nisn else "N/A",
                 "nama": student_profile.name or user.username
             },
             "kelas": {
                 "nama": kelas_aktif.namaKelas,
+                "wali_kelas": kelas_aktif.waliKelas.name,
+                "wali_kelas_nisp": kelas_aktif.waliKelas.nisp if kelas_aktif.waliKelas else "N/A",
                 "tahun_ajaran": str(kelas_aktif.tahunAjaran),
                 "angkatan": kelas_aktif.angkatan
             },
