@@ -1,3 +1,4 @@
+from datetime import timedelta
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from kelas.models import Kelas
@@ -924,6 +925,225 @@ def get_teacher_kelas(request):
             "data": response_data
         }, status=200)
     
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsTeacherRole])
+def weekly_attendance_summary(request, kelas_id):
+    """
+    Get weekly attendance summary for a specific class
+    """
+    try:
+        # Get the current teacher
+        teacher = Teacher.objects.get(user=request.user)
+        
+        # Get the requested class
+        try:
+            kelas = Kelas.objects.get(id=kelas_id, waliKelas=teacher)
+        except Kelas.DoesNotExist:
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": "Kelas tidak ditemukan atau Anda bukan wali kelas untuk kelas ini."
+            }, status=404)
+        
+        # Get current date and calculate the start of the week (Monday)
+        today = timezone.now().date()
+        start_of_week = today - timedelta(days=today.weekday())  # Monday
+        end_of_week = start_of_week + timedelta(days=4)  # Friday
+        
+        # Get all attendance records for this class in the current week
+        weekly_attendance = AbsensiHarian.objects.filter(
+            kelas=kelas,
+            date__gte=start_of_week,
+            date__lte=end_of_week
+        ).order_by('date')
+        
+        # Initialize counters for the week
+        total_students = kelas.siswa.count()
+        if total_students == 0:
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": "Kelas ini tidak memiliki siswa."
+            }, status=400)
+            
+        weekly_stats = {
+            "Hadir": 0,
+            "Sakit": 0,
+            "Izin": 0,
+            "Alfa": 0  # "Tanpa Keterangan"
+        }
+        
+        # Process each attendance record
+        for record in weekly_attendance:
+            day_of_week = record.date.weekday()
+            if day_of_week > 4:  # Skip weekends
+                continue
+                
+            # Process each student's attendance
+            for student_id, data in record.listSiswa.items():
+                status = data.get("status", data) if isinstance(data, dict) else data
+                    
+                # Update weekly stats
+                if status in weekly_stats:
+                    weekly_stats[status] += 1
+        
+        # Calculate weekly percentages
+        total_possible_attendance = total_students * len(weekly_attendance)
+        weekly_percentages = {}
+        
+        if total_possible_attendance > 0:
+            for status, count in weekly_stats.items():
+                weekly_percentages[status] = round((count / total_possible_attendance) * 100, 1)
+        else:
+            for status in weekly_stats:
+                weekly_percentages[status] = 0
+        
+        # Format the response
+        response_data = {
+            "status": 200,
+            "message": "Ringkasan mingguan kehadiran berhasil diambil",
+            "data": {
+                "kelas": {
+                    "id": kelas.id,
+                    "namaKelas": kelas.namaKelas,
+                    "totalSiswa": total_students
+                },
+                "weeklyOverview": {
+                    "timeSpan": f"{start_of_week.strftime('%d %b')} - {end_of_week.strftime('%d %b %Y')}",
+                    "percentages": weekly_percentages,
+                    "counts": weekly_stats,
+                    "totalRecords": len(weekly_attendance)
+                }
+            }
+        }
+        
+        return JsonResponse(response_data, status=200)
+        
+    except Teacher.DoesNotExist:
+        return JsonResponse({
+            "status": 404,
+            "errorMessage": "Profil guru tidak ditemukan."
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsTeacherRole])
+def daily_attendance_summary(request, kelas_id):
+    """
+    Get daily attendance percentages for a specific class
+    """
+    try:
+        # Get the current teacher
+        teacher = Teacher.objects.get(user=request.user)
+        
+        # Get the requested class
+        try:
+            kelas = Kelas.objects.get(id=kelas_id, waliKelas=teacher)
+        except Kelas.DoesNotExist:
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": "Kelas tidak ditemukan atau Anda bukan wali kelas untuk kelas ini."
+            }, status=404)
+        
+        # Get current date and calculate the start of the week (Monday)
+        today = timezone.now().date()
+        start_of_week = today - timedelta(days=today.weekday())  # Monday
+        end_of_week = start_of_week + timedelta(days=4)  # Friday
+        
+        # Get all attendance records for this class in the current week
+        weekly_attendance = AbsensiHarian.objects.filter(
+            kelas=kelas,
+            date__gte=start_of_week,
+            date__lte=end_of_week
+        ).order_by('date')
+        
+        # Initialize counters
+        total_students = kelas.siswa.count()
+        if total_students == 0:
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": "Kelas ini tidak memiliki siswa."
+            }, status=400)
+            
+        # Daily attendance percentages
+        daily_attendance = {}
+        indonesian_days = {
+            0: "Senin",
+            1: "Selasa",
+            2: "Rabu",
+            3: "Kamis",
+            4: "Jumat"
+        }
+        
+        # Process each attendance record
+        for record in weekly_attendance:
+            day_of_week = record.date.weekday()
+            if day_of_week > 4:  # Skip weekends
+                continue
+                
+            day_name = indonesian_days[day_of_week]
+            
+            # Count statuses for this day
+            day_stats = {
+                "Hadir": 0,
+                "Sakit": 0,
+                "Izin": 0,
+                "Alfa": 0
+            }
+            
+            # Process each student's attendance
+            for student_id, data in record.listSiswa.items():
+                status = data.get("status", data) if isinstance(data, dict) else data
+                
+                # Update daily stats
+                if status in day_stats:
+                    day_stats[status] += 1
+            
+            # Calculate attendance percentage for this day
+            attendance_percentage = (day_stats["Hadir"] / total_students * 100) if total_students > 0 else 0
+            
+            # Add to daily attendance data
+            daily_attendance[day_name] = {
+                "date": record.date.strftime("%d %b %Y"),
+                "percentage": round(attendance_percentage, 1),
+                "hadir": day_stats["Hadir"],
+                "sakit": day_stats["Sakit"],
+                "izin": day_stats["Izin"],
+                "alfa": day_stats["Alfa"],
+                "totalSiswa": total_students
+            }
+        
+        # Format the response
+        response_data = {
+            "status": 200,
+            "message": "Ringkasan kehadiran harian berhasil diambil",
+            "data": {
+                "kelas": {
+                    "id": kelas.id,
+                    "namaKelas": kelas.namaKelas,
+                    "totalSiswa": total_students
+                },
+                "timeSpan": f"{start_of_week.strftime('%d %b')} - {end_of_week.strftime('%d %b %Y')}",
+                "dailyAttendance": daily_attendance
+            }
+        }
+        
+        return JsonResponse(response_data, status=200)
+        
+    except Teacher.DoesNotExist:
+        return JsonResponse({
+            "status": 404,
+            "errorMessage": "Profil guru tidak ditemukan."
+        }, status=404)
     except Exception as e:
         return JsonResponse({
             "status": 500,
