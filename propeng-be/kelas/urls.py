@@ -20,5 +20,5 @@ urlpatterns = [
     path('kelas-saya/', get_teacher_kelas, name='get_teacher_kelas'),
     path('weekly-summary/<int:kelas_id>/', weekly_attendance_summary, name='weekly_attendance_summary'),
     path('daily-summary/<int:kelas_id>/', daily_attendance_summary, name='daily_attendance_summary'),
-
+    path('weekly-detail-report/<int:kelas_id>/', weekly_detail_report, name='weekly_detail_report'),
 ]

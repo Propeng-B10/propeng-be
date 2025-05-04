@@ -1149,3 +1149,149 @@ def daily_attendance_summary(request, kelas_id):
             "status": 500,
             "errorMessage": f"Terjadi kesalahan: {str(e)}"
         }, status=500)
+        
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsTeacherRole])
+def weekly_detail_report(request, kelas_id):
+    """
+    Get detailed weekly attendance report for a specific class,
+    showing each student's attendance status for each day of the week
+    """
+    try:
+        # Get the current teacher
+        teacher = Teacher.objects.get(user=request.user)
+        
+        # Get the requested class
+        try:
+            kelas = Kelas.objects.get(id=kelas_id, waliKelas=teacher)
+        except Kelas.DoesNotExist:
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": "Kelas tidak ditemukan atau Anda bukan wali kelas untuk kelas ini."
+            }, status=404)
+        
+        # Get current date and calculate the start of the week (Monday)
+        today = timezone.now().date()
+        start_of_week = today - timedelta(days=today.weekday())  # Monday
+        end_of_week = start_of_week + timedelta(days=4)  # Friday
+        
+        # Get all attendance records for this class in the current week
+        weekly_attendance = AbsensiHarian.objects.filter(
+            kelas=kelas,
+            date__gte=start_of_week,
+            date__lte=end_of_week
+        ).order_by('date')
+        
+        # Get all students in the class
+        students = kelas.siswa.all()
+        if not students.exists():
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": "Kelas ini tidak memiliki siswa."
+            }, status=400)
+        
+        # Create a dictionary to store attendance data by day
+        attendance_by_day = {}
+        indonesian_days = {
+            0: "Senin",
+            1: "Selasa",
+            2: "Rabu",
+            3: "Kamis",
+            4: "Jumat"
+        }
+        
+        # Initialize the student report structure
+        student_reports = {}
+        for student in students:
+            student_reports[str(student.user_id)] = {
+                "id": student.user_id,
+                "name": student.name,
+                "nisn": student.nisn,
+                "days": {},
+                "summary": {
+                    "Hadir": 0,
+                    "Sakit": 0,
+                    "Izin": 0,
+                    "Alfa": 0,
+                    "total": 0,
+                    "percentage": 0
+                }
+            }
+        
+        # Process each attendance record
+        for record in weekly_attendance:
+            day_of_week = record.date.weekday()
+            if day_of_week > 4:  # Skip weekends
+                continue
+                
+            day_name = indonesian_days[day_of_week]
+            date_str = record.date.strftime("%Y-%m-%d")
+            
+            # Add this day to the attendance_by_day dictionary
+            attendance_by_day[date_str] = {
+                "day": day_name,
+                "date": record.date.strftime("%d %b %Y"),
+                "weekday": day_of_week
+            }
+            
+            # Process each student's attendance for this day
+            for student_id, data in record.listSiswa.items():
+                # Skip if student is not in the class anymore
+                if student_id not in student_reports:
+                    continue
+                    
+                # Extract status from data (handle both formats)
+                if isinstance(data, dict):
+                    status = data.get("status", "Alfa")
+                else:
+                    status = data
+                
+                # Add this day's status to the student's report
+                student_reports[student_id]["days"][date_str] = {
+                    "day": day_name,
+                    "date": record.date.strftime("%d %b %Y"),
+                    "status": status
+                }
+                
+                # Update the student's summary
+                student_reports[student_id]["summary"][status] += 1
+                student_reports[student_id]["summary"]["total"] += 1
+        
+        # Calculate attendance percentages for each student
+        for student_id, report in student_reports.items():
+            total_days = report["summary"]["total"]
+            if total_days > 0:
+                hadir_count = report["summary"]["Hadir"]
+                report["summary"]["percentage"] = round((hadir_count / total_days) * 100, 1)
+        
+        # Sort days chronologically
+        sorted_days = sorted(attendance_by_day.keys())
+        
+        # Format the response
+        response_data = {
+            "status": 200,
+            "message": "Laporan detail mingguan kehadiran berhasil diambil",
+            "data": {
+                "kelas": {
+                    "id": kelas.id,
+                    "namaKelas": kelas.namaKelas,
+                    "totalSiswa": students.count()
+                },
+                "timeSpan": f"{start_of_week.strftime('%d %b')} - {end_of_week.strftime('%d %b %Y')}",
+                "days": [attendance_by_day[day] for day in sorted_days],
+                "students": list(student_reports.values())
+            }
+        }
+        
+        return JsonResponse(response_data, status=200)
+        
+    except Teacher.DoesNotExist:
+        return JsonResponse({
+            "status": 404,
+            "errorMessage": "Profil guru tidak ditemukan."
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)
