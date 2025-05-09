@@ -72,6 +72,8 @@ SIMPLE_JWT = {
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Next.js frontend
+    "https://simakanglo.my.id",
+    "*"
 ]
 
 # Application definition
