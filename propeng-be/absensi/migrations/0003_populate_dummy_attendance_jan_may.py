@@ -21,7 +21,7 @@ def create_dummy_attendance(apps, schema_editor):
     # Define the name of the class you want to populate attendance for
     # IMPORTANT: Replace 'Nama Kelas Target' with the actual name of the class.
     # You can add more names to this list if you want to populate multiple classes.
-    target_kelas_names = ['Kelas ABIL'] # Use a list for potentially multiple classes
+    target_kelas_names = ['ABIL'] # Use a list for potentially multiple classes
 
     # Define the date range
     year = timezone.now().year # Use current year
