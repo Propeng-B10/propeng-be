@@ -18,7 +18,4 @@ urlpatterns = [
     path('list_avail_absensi/', get_kelas_with_absensi, name='list_all_ada_absen'),
     path('kode/<int:kelas_id>/', get_kode_absensi_kelas, name='kode_absens'),
     path('kelas-saya/', get_teacher_kelas, name='get_teacher_kelas'),
-    path('weekly-summary/<int:kelas_id>/', weekly_attendance_summary, name='weekly_attendance_summary'),
-    path('daily-summary/<int:kelas_id>/', daily_attendance_summary, name='daily_attendance_summary'),
-    path('weekly-detail-report/<int:kelas_id>/', weekly_detail_report, name='weekly_detail_report'),
 ]
