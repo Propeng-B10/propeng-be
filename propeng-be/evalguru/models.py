@@ -2,7 +2,8 @@ from django.db import models
 from user.models import Teacher, Student 
 from matapelajaran.models import MataPelajaran
 
-
+# Form evaluasi guru yang diisi oleh siswa 
+# Ini gua gatau sih staticnya gimana jadi gua nge-state 1-5
 class EvalGuru(models.Model):
     pilihanvariabel = [
         1, 2, 3, 4, 5
