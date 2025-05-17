@@ -190,7 +190,7 @@ def guru_get_evalguru_in_mapel(request):
         for indikator_choice in EvalGuru.pilihanindikator:
             indicator_id = indikator_choice[0]
             rata_rata = skor_map.get((var_id, indicator_id))
-            data_per_variabel[f"Indikator {indicator_id}"] = f"{rata_rata:.2f} / 5" if rata_rata is not None else "- / 5"
+            data_per_variabel[f"Indikator {indicator_id}"] = f"{rata_rata:.2f} / 5.00" if rata_rata is not None else "- / 5.00"
         hasil_evaluasi_list.append(data_per_variabel)
 
     return JsonResponse({
@@ -254,7 +254,7 @@ def guru_get_all_evaluations_summary(request):
             var_id = variabel_choice[0]  
             skor_list = data['skor_collections'].get(var_id, [])
             avg_skor_value = sum(skor_list) / len(skor_list) if skor_list else None
-            mapel_summary["skor_per_variabel"][str(var_id)] = f"{avg_skor_value:.2f} / 5" if avg_skor_value is not None else "- / 5"
+            mapel_summary["skor_per_variabel"][str(var_id)] = f"{avg_skor_value:.2f} / 5.00" if avg_skor_value is not None else "- / 5.00"
         all_mapel_summary_data.append(mapel_summary)
 
     return JsonResponse({"status": status.HTTP_200_OK, "message": "Rangkuman evaluasi per mata pelajaran guru.", "data_evaluasi": all_mapel_summary_data}, status=status.HTTP_200_OK)
@@ -339,7 +339,7 @@ def get_overall_teacher_evaluations_overview(request):
                 var_id = variabel_choice[0] 
                 skor_list = data_guru['evaluations_for_vars_per_guru_ta'].get(var_id, [])
                 avg_skor = sum(skor_list) / len(skor_list) if skor_list else None
-                guru_output['skor_per_variabel'][str(var_id)] = f"{avg_skor:.2f} / 5" if avg_skor is not None else "- / 5"
+                guru_output['skor_per_variabel'][str(var_id)] = f"{avg_skor:.2f} / 5.00" if avg_skor is not None else "- / 5.00"
             final_response_data[ta_key].append(guru_output)
 
     return JsonResponse({
@@ -431,7 +431,7 @@ def get_teacher_evaluation_detail_page(request):
             var_id = var_choice[0]
             skor_list = skor_var_temp.get(var_id, [])
             avg_skor = sum(skor_list) / len(skor_list) if skor_list else None
-            ringkasan_skor_per_variabel[str(var_id)] = f"{avg_skor:.2f} / 5" if avg_skor is not None else "- / 5"
+            ringkasan_skor_per_variabel[str(var_id)] = f"{avg_skor:.2f} / 5.00" if avg_skor is not None else "- / 5.00"
 
         detail_evaluasi_indikator_list = []
         skor_var_ind_temp = defaultdict(lambda: defaultdict(list))
@@ -445,7 +445,7 @@ def get_teacher_evaluation_detail_page(request):
                 ind_id = ind_choice[0]
                 skor_list = skor_var_ind_temp.get(var_id, {}).get(ind_id, [])
                 avg_skor = sum(skor_list) / len(skor_list) if skor_list else None
-                data_per_variabel[f"Indikator {ind_id}"] = f"{avg_skor:.2f} / 5" if avg_skor is not None else "- / 5"
+                data_per_variabel[f"Indikator {ind_id}"] = f"{avg_skor:.2f} / 5.00" if avg_skor is not None else "- / 5.00"
             detail_evaluasi_indikator_list.append(data_per_variabel)
 
         all_kritik_saran_mapel = []
