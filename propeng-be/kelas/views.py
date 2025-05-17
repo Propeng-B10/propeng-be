@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from kelas.models import Kelas
 from kelas.models import Student
 from kelas.models import Teacher
+from matapelajaran.models import MataPelajaran
 from tahunajaran.models import TahunAjaran
 import re
 from rest_framework.permissions import IsAuthenticated, BasePermission
@@ -892,6 +893,28 @@ def get_teacher_kelas(request):
                     elif status == "Izin":
                         total_izin += 1
             
+             # Ambil semua siswa di kelas
+            siswa_kelas = k.siswa.all()
+
+            # Cari semua matpel yang siswanya ada dalam kelas ini
+            matpel_qs = MataPelajaran.objects.filter(
+                siswa_terdaftar__in=siswa_kelas,
+                isDeleted=False,
+                isActive=True,
+            ).distinct()
+
+            # Siapkan list matpel unik
+            mata_pelajaran_unik = [
+                {
+                    "id": mp.id,
+                    "nama": mp.nama,
+                    "kode": mp.kode,
+                    "kategori": mp.kategoriMatpel,
+                }
+                for mp in matpel_qs
+            ]
+
+            
             # Add class data with attendance stats to response
             response_data.append({
                 "id": k.id,
@@ -905,6 +928,7 @@ def get_teacher_kelas(request):
                     "totalSakit": total_sakit,
                     "totalIzin": total_izin
                 },
+                "mata_pelajaran_unik": mata_pelajaran_unik,
                 "angkatan": k.angkatan if k.angkatan >= 1000 else k.angkatan + 2000,
                 "isActive": k.isActive,
                 "expiredAt": k.expiredAt.strftime('%Y-%m-%d') if k.expiredAt else None,
@@ -930,4 +954,5 @@ def get_teacher_kelas(request):
             "status": 500,
             "errorMessage": f"Terjadi kesalahan: {str(e)}"
         }, status=500)
-
+    
+    
