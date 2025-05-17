@@ -5,6 +5,7 @@ from matapelajaran.models import MataPelajaran
 # Form evaluasi guru yang diisi oleh siswa 
 # Ini gua gatau sih staticnya gimana jadi gua nge-state 1-5
 class EvalGuru(models.Model):
+    id = models.AutoField(primary_key=True)
     pilihanvariabel = [
         (1,1), (2,2), (3,3), (4,4), (5,5)
     ]
