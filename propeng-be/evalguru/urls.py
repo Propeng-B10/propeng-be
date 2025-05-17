@@ -24,6 +24,6 @@ urlpatterns = [
 
     # Endpoint untuk melihat detail evaluasi guru per tahun ajaran (untuk admin)
     # URL menjadi: api/evalguru/detail-tahunan/
-    # Menggunakan GET, tidak ada parameter yang dibutuhkan dari client via URL path atau query
+    # Direkomendasikan menggunakan query params untuk GET: ?guru_id=X&tahun_ajaran_id=Y
     path('detail-tahunan/', views.get_teacher_evaluation_detail_page, name='get_teacher_evaluation_detail_page'),
 ]
