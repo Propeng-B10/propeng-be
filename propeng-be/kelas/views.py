@@ -928,7 +928,7 @@ def get_teacher_kelas(request):
                     "totalSakit": total_sakit,
                     "totalIzin": total_izin
                 },
-                "mata_pelajaran_unik": mata_pelajaran_unik,
+                "mata_pelajaran_unik": mata_pelajaran_unik, 
                 "angkatan": k.angkatan if k.angkatan >= 1000 else k.angkatan + 2000,
                 "isActive": k.isActive,
                 "expiredAt": k.expiredAt.strftime('%Y-%m-%d') if k.expiredAt else None,
