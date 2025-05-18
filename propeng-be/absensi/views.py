@@ -951,7 +951,7 @@ def get_monthly_student_attendance_analysis(request, kelas_id):
                  }.get(month, ""),
                  "startDate": start_date.strftime('%Y-%m-%d'),
                  "endDate": end_date.strftime('%Y-%m-%d'),
-                 "totalPossibleDays": total_possible_days_in_month # Total weekdays with records
+                 "totalPossibleDaysInMonth": total_possible_days_in_month # Total weekdays with records
             },
             "top_students": top_students,
             "bottom_students": bottom_students
@@ -1446,14 +1446,27 @@ def get_monthly_class_attendance_overview(request, kelas_id):
 
         monthly_averages = {}
         if total_attendance_slots_processed > 0:
+            # Calculate raw percentages first
+            raw_percentages = {}
+            total_raw_percentage = 0
             for status in possible_statuses:
-                 status_total = monthly_total_counts.get(status, 0)
-                 monthly_averages[status] = round(
-                    (status_total / total_attendance_slots_processed) * 100, 1
-                 )
+                status_total = monthly_total_counts.get(status, 0)
+                raw_percentage = (status_total / total_attendance_slots_processed) * 100
+                raw_percentages[status] = raw_percentage
+                total_raw_percentage += raw_percentage
+
+            # Normalize percentages to ensure they sum to 100%
+            if total_raw_percentage > 0:  # Avoid division by zero
+                for status in possible_statuses:
+                    normalized_percentage = (raw_percentages[status] / total_raw_percentage) * 100
+                    monthly_averages[status] = round(normalized_percentage, 1)
+            else:
+                # If no attendance records, set all to 0
+                for status in possible_statuses:
+                    monthly_averages[status] = 0.0
         else:
-             # If no records found in the month, averages are all 0
-             for status in possible_statuses:
+            # If no records found in the month, averages are all 0
+            for status in possible_statuses:
                 monthly_averages[status] = 0.0
 
         # 9. Assemble the final response data
