@@ -4,7 +4,7 @@ from matapelajaran.models import MataPelajaran
 from user.models import Teacher, Student
 from kelas.models import Kelas 
 from tahunajaran.models import TahunAjaran 
-from django.db.models import Avg, F
+from django.db.models import Avg, F, Count, Subquery, OuterRef, IntegerField
 from collections import defaultdict
 from rest_framework.decorators import api_view
 from django.db import transaction
