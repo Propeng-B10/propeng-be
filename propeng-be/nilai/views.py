@@ -143,8 +143,18 @@ def grade_data_view(request: Request, matapelajaran_id: int):
             'komponenpenilaian_matpel' # Prefetch components
         ).get(id=matapelajaran_id, isDeleted=False, isActive=True)
     except MataPelajaran.DoesNotExist: return drf_error_response(f"MatPel tidak ditemukan.", status.HTTP_404_NOT_FOUND)
-    if matapelajaran.teacher and matapelajaran.teacher != requesting_teacher: return drf_error_response("Tidak ada izin.", status.HTTP_403_FORBIDDEN)
+    if matapelajaran.teacher and matapelajaran.teacher != requesting_teacher:
+        siswa_ids = matapelajaran.siswa_terdaftar.values_list("id", flat=True)
+        wali_kelas_kelas = Kelas.objects.filter(
+            siswa__in=siswa_ids,
+            waliKelas=requesting_teacher,
+            isActive=True,
+            isDeleted=False
+        ).distinct()
 
+        if not wali_kelas_kelas.exists():
+            return drf_error_response("Tidak ada izin.", status.HTTP_403_FORBIDDEN)
+    
     # ==========================
     # --- Handle GET Request ---
     # ==========================
