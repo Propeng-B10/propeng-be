@@ -26,8 +26,6 @@ def get_student_main_class_info(student_obj):
         return nama_kelas_str, tahun_ajaran_str
     return "N/A", "N/A"
 
-
-
 @api_view(['POST'])
 def siswafill_evalguru(request):
     main_data = request.data 

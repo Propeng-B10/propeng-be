@@ -359,6 +359,11 @@ def update_student_absensi(request):
                 "status": 404,
                 "errorMessage": f"Siswa dengan ID {student_id} tidak terdaftar di kelas aktif manapun"
             }, status=404)
+        if not student_classes.first().isActive:
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": f"Kelas ini sudah tidak aktif"
+            }, status=404)
         try:
             if isinstance(absensi_date, str):
                 from datetime import datetime
