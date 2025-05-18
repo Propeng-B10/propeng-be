@@ -403,12 +403,21 @@ def get_teacher_evaluation_detail_page(request):
         return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": f"Guru id {guru_id} tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
     except TahunAjaran.DoesNotExist:
         return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": f"Tahun Ajaran dengan nilai '{tahun_ajaran_value}' tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+    
+    evaluations_in_scope = EvalGuru.objects.filter(
+        guru_id=guru_id,
+        matapelajaran__tahunAjaran__tahunAjaran=tahun_ajaran_value
+    ).select_related('matapelajaran')
 
+    subject_names_taught = sorted(list(
+        evaluations_in_scope.values_list('matapelajaran__nama', flat=True).distinct()
+    ))
     info_konteks = {
         "guru_id": guru_obj.user_id, # Atau guru_obj.pk jika user_id adalah foreign key ke User
         "nama_guru": guru_obj.name if hasattr(guru_obj, 'name') else "N/A",
         "nisp": guru_obj.nisp if hasattr(guru_obj, 'nisp') else "N/A",
-        "tahun_ajaran": str(tahun_ajaran_value)
+        "tahun_ajaran": str(tahun_ajaran_value),
+        "daftar_matapelajaran_diajar": subject_names_taught, # <-- FIELD BARU DITAMBAHKAN
     }
 
     # Filter evaluasi berdasarkan guru_id dan tahun ajaran siswa
