@@ -896,12 +896,16 @@ def get_teacher_kelas(request):
              # Ambil semua siswa di kelas
             siswa_kelas = k.siswa.all()
 
+            print(k.siswa.all())
+
             # Cari semua matpel yang siswanya ada dalam kelas ini
             matpel_qs = MataPelajaran.objects.filter(
                 siswa_terdaftar__in=siswa_kelas,
                 isDeleted=False,
                 isActive=True,
             ).distinct()
+
+            print(matpel_qs)
 
             # Siapkan list matpel unik
             mata_pelajaran_unik = [
