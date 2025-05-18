@@ -32,3 +32,4 @@ class EvalGuru(models.Model):
     skorlikert = models.PositiveIntegerField(choices=pilihanskorlikert)
     createdAt = models.DateTimeField(auto_now_add=True)
     updatedAt = models.DateTimeField(auto_now=True)
+    kritik_saran = models.TextField(blank=True, null=True) 
