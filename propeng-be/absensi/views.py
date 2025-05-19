@@ -1597,21 +1597,26 @@ def get_yearly_attendance_summary(request, kelas_id):
                 monthly_total_counts = defaultdict(int)
                 weekly_summaries = []
 
-                # Group records by week
-                weekly_records = {}
+                # Get the maximum week number for this month
+                max_week = 0
                 for record in monthly_records:
-                    week_num = ((record.date.day - 1) // 7) + 1
-                    if week_num not in weekly_records:
-                        weekly_records[week_num] = []
-                    weekly_records[week_num].append(record)
+                    week_num = get_week_of_month(record.date)
+                    max_week = max(max_week, week_num)
 
                 # Process each week
-                for week_num, week_records in weekly_records.items():
-                    if not week_records:
+                for week_num in range(1, max_week + 1):
+                    # Get the date range for this week
+                    week_start, week_end = get_week_date_range_in_month(year, month, week_num)
+                    
+                    # Get records for this week
+                    week_records = monthly_records.filter(
+                        date__gte=week_start,
+                        date__lte=week_end
+                    )
+
+                    if not week_records.exists():
                         continue
 
-                    week_start = week_records[0].date
-                    week_end = week_records[-1].date
                     weekly_total_counts = defaultdict(int)
                     daily_details = {}
 
