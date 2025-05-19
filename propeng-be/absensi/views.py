@@ -359,6 +359,11 @@ def update_student_absensi(request):
                 "status": 404,
                 "errorMessage": f"Siswa dengan ID {student_id} tidak terdaftar di kelas aktif manapun"
             }, status=404)
+        if not student_classes.first().isActive:
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": f"Kelas ini sudah tidak aktif"
+            }, status=404)
         try:
             if isinstance(absensi_date, str):
                 from datetime import datetime
@@ -1592,21 +1597,26 @@ def get_yearly_attendance_summary(request, kelas_id):
                 monthly_total_counts = defaultdict(int)
                 weekly_summaries = []
 
-                # Group records by week
-                weekly_records = {}
+                # Get the maximum week number for this month
+                max_week = 0
                 for record in monthly_records:
-                    week_num = ((record.date.day - 1) // 7) + 1
-                    if week_num not in weekly_records:
-                        weekly_records[week_num] = []
-                    weekly_records[week_num].append(record)
+                    week_num = get_week_of_month(record.date)
+                    max_week = max(max_week, week_num)
 
                 # Process each week
-                for week_num, week_records in weekly_records.items():
-                    if not week_records:
+                for week_num in range(1, max_week + 1):
+                    # Get the date range for this week
+                    week_start, week_end = get_week_date_range_in_month(year, month, week_num)
+                    
+                    # Get records for this week
+                    week_records = monthly_records.filter(
+                        date__gte=week_start,
+                        date__lte=week_end
+                    )
+
+                    if not week_records.exists():
                         continue
 
-                    week_start = week_records[0].date
-                    week_end = week_records[-1].date
                     weekly_total_counts = defaultdict(int)
                     daily_details = {}
 
@@ -1666,12 +1676,25 @@ def get_yearly_attendance_summary(request, kelas_id):
                     else:
                         weekly_averages = {status: 0.0 for status in possible_statuses}
 
+                    # Format the display date range
+                    start_day = week_start.day
+                    end_day = week_end.day
+                    start_month_name = indonesian_months[week_start.month]
+                    end_month_name = indonesian_months[week_end.month]
+                    
+                    if week_start.month == week_end.month:
+                        # Same month: "6 - 10 January"
+                        display_date_range = f"{start_day} - {end_day} {start_month_name}"
+                    else:
+                        # Different months: "31 March - 4 April"
+                        display_date_range = f"{start_day} {start_month_name} - {end_day} {end_month_name}"
+
                     # Add weekly summary
                     weekly_summaries.append({
                         "week_info": {
                             "startDate": week_start.strftime('%Y-%m-%d'),
                             "endDate": week_end.strftime('%Y-%m-%d'),
-                            "displayWeek": f"Minggu {week_num}"
+                            "displayWeek": f"Minggu {week_num}: {display_date_range}"
                         },
                         "weekly_averages": weekly_averages,
                         "daily_details": sorted(
@@ -1717,7 +1740,9 @@ def get_yearly_attendance_summary(request, kelas_id):
                 })
 
             except Exception as e:
-                print(f"Error processing month {month}: {e}")
+                print(f"Error processing month {month}: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 continue
 
         # 6. Prepare final response
