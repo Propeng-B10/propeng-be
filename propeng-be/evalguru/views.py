@@ -339,9 +339,7 @@ def get_overall_teacher_evaluations_overview(request):
                 subject_display_name = subject.nama
                 if subject.tahunAjaran and hasattr(subject.tahunAjaran, 'tahunAjaran'):
                     start_year = subject.tahunAjaran.tahunAjaran
-                    # Membuat format seperti "Biologi Organik 2024/2025"
                     subject_display_name = f"{subject.nama}"
-                    # subject_display_name = f"{subject.nama} {start_year}/{start_year + 1}"
                 
                 mata_pelajaran_summary_names_list.append(subject_display_name)
                 
@@ -352,9 +350,6 @@ def get_overall_teacher_evaluations_overview(request):
                     "total_siswa_mapel": f"{subject.num_siswa_terdaftar}",
                 })
             
-            # Pengurutan daftar nama dan detail mungkin lebih baik dilakukan setelah loop jika diperlukan urutan khusus
-            # Jika pengurutan di query .order_by('nama') sudah cukup, list nama akan mengikuti urutan itu.
-
             skor_per_variabel_guru = {}
             for var_choice in EvalGuru.pilihanvariabel:
                 var_id_str = str(var_choice[0])
@@ -366,38 +361,35 @@ def get_overall_teacher_evaluations_overview(request):
                 "guru_id": teacher_info['guru_id'],
                 "nama_guru": teacher_info['nama_guru'],
                 "nisp": teacher_info['nisp'],
-                "mata_pelajaran_summary": mata_pelajaran_summary_names_list, # Daftar nama
-                "detail_per_mata_pelajaran": detail_per_mata_pelajaran_list, # Daftar objek detail
-                "skor_per_variabel": skor_per_variabel_guru # Menggunakan key 'skor_per_variabel'
+                "mata_pelajaran_summary": mata_pelajaran_summary_names_list, 
+                "detail_per_mata_pelajaran": detail_per_mata_pelajaran_list, 
+                "skor_per_variabel": skor_per_variabel_guru 
             })
             
     return JsonResponse({
         "status": status.HTTP_200_OK,
-        "message": "Data evaluasi keseluruhan guru per tahun ajaran.", # Sesuai contoh user
+        "message": "Data evaluasi keseluruhan guru per tahun ajaran.", 
         "data_evaluasi_per_tahun": final_response_data
     }, status=status.HTTP_200_OK)
 
+
 @api_view(['GET'])
-def get_teacher_evaluation_detail_page(request):
+def get_teacher_evaluation_detail_page(request): 
     guru_id_str = request.query_params.get('guru_id')
-    tahun_ajaran_val_str = request.query_params.get('tahun_ajaran_id') # Ini adalah nilai tahun, misal 2025
+    tahun_ajaran_val_str = request.query_params.get('tahun_ajaran_id')
 
     if not guru_id_str or not tahun_ajaran_val_str:
         return JsonResponse({"status": status.HTTP_400_BAD_REQUEST, "message": "Parameter guru_id dan tahun_ajaran_id (nilai tahun) diperlukan."}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         guru_id = int(guru_id_str)
-        tahun_ajaran_value = int(tahun_ajaran_val_str) # Ini adalah nilai tahun (integer)
+        tahun_ajaran_value = int(tahun_ajaran_val_str)
     except ValueError:
         return JsonResponse({"status": status.HTTP_400_BAD_REQUEST, "message": "ID guru dan nilai tahun ajaran harus berupa angka."}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         guru_obj = Teacher.objects.get(pk=guru_id)
-        # Pastikan tahun ajaran ada di DB (Meskipun kita menggunakan nilainya untuk filter siswa)
-        tahun_ajaran_obj_exists = TahunAjaran.objects.filter(tahunAjaran=tahun_ajaran_value).exists()
-        if not tahun_ajaran_obj_exists:
-            # Meskipun kita tidak menggunakan objek TahunAjaran secara langsung untuk query utama,
-            # ada baiknya memastikan nilai tahun ajaran yang diberikan valid.
+        if not TahunAjaran.objects.filter(tahunAjaran=tahun_ajaran_value).exists():
             raise TahunAjaran.DoesNotExist
     except Teacher.DoesNotExist:
         return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": f"Guru id {guru_id} tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
@@ -407,43 +399,39 @@ def get_teacher_evaluation_detail_page(request):
     evaluations_in_scope = EvalGuru.objects.filter(
         guru_id=guru_id,
         matapelajaran__tahunAjaran__tahunAjaran=tahun_ajaran_value
-    ).select_related('matapelajaran')
+    ).select_related('matapelajaran', 'siswa')
 
     subject_names_taught = sorted(list(
         evaluations_in_scope.values_list('matapelajaran__nama', flat=True).distinct()
     ))
+    
     info_konteks = {
-        "guru_id": guru_obj.user_id, # Atau guru_obj.pk jika user_id adalah foreign key ke User
+        "guru_id": guru_obj.user_id if hasattr(guru_obj, 'user_id') else guru_obj.pk,
         "nama_guru": guru_obj.name if hasattr(guru_obj, 'name') else "N/A",
         "nisp": guru_obj.nisp if hasattr(guru_obj, 'nisp') else "N/A",
         "tahun_ajaran": str(tahun_ajaran_value),
-        "daftar_matapelajaran_diajar": subject_names_taught, # <-- FIELD BARU DITAMBAHKAN
+        "daftar_matapelajaran_diajar": subject_names_taught if subject_names_taught else ["Tidak ada mata pelajaran dengan evaluasi untuk tahun ini."],
+        "skor_rata_rata_keseluruhan_guru": "- / 5.00",
+        "jumlah_form_evaluasi_terisi_keseluruhan": 0, 
     }
-
-    # Filter evaluasi berdasarkan guru_id dan tahun ajaran siswa
-    # Asumsi: evaluasi mengacu pada tahun ajaran siswa saat mengisi,
-    # yang mana harusnya relevan dengan tahun ajaran mata pelajaran yang diajar guru.
-    evaluations_in_scope = EvalGuru.objects.filter(
-        guru_id=guru_id,
-        # Filter berdasarkan tahun ajaran siswa yang melakukan evaluasi.
-        # Ini mengasumsikan bahwa Kelas siswa memiliki foreign key ke TahunAjaran,
-        # dan Student memiliki relasi ke Kelas.
-        # Struktur model Student Anda adalah `student.kelas_set.filter(tahunAjaran__tahunAjaran=tahun_ajaran_value)`
-        # atau jika siswa bisa di banyak kelas:
-        # `siswa__kelas__tahunAjaran__tahunAjaran=tahun_ajaran_value`
-        # Namun, karena EvalGuru sudah memiliki `siswa` (Student object),
-        # dan Student memiliki `angkatan` yang mungkin terkait dengan `TahunAjaran`.
-        # Untuk lebih presisi, kita perlu tahu bagaimana tahun ajaran evaluasi ditentukan.
-        # Jika `MataPelajaran` memiliki `tahunAjaran` dan evaluasi selalu terkait `MataPelajaran` yang aktif di tahun itu:
-        matapelajaran__tahunAjaran__tahunAjaran=tahun_ajaran_value
-    ).select_related('matapelajaran', 'siswa') # siswa mungkin tidak perlu di sini jika hanya untuk count
+    
+    evaluasi_keseluruhan_rerata = {
+        "jumlah_form_evaluasi_terisi": 0, 
+        "total_siswa_diajar_di_matapelajaran_terevaluasi": 0,
+        "daftar_kelas_evaluasi_unik_gabungan": "N/A",
+        "ringkasan_skor_rata_rata_per_variabel_gabungan": {},
+        "detail_skor_rata_rata_per_indikator_gabungan": [],
+        "daftar_kritik_saran_gabungan": ["Tidak ada kritik/saran secara keseluruhan."],
+        "skor_grand_total_dari_variabel_gabungan": "- / 5.00"
+    }
 
     if not evaluations_in_scope.exists():
         return JsonResponse({
             "status": status.HTTP_200_OK,
-            "message": f"Tidak ada evaluasi ditemukan untuk guru {guru_obj.name if hasattr(guru_obj, 'name') else 'N/A'} pada tahun ajaran {tahun_ajaran_value}.",
+            "message": f"Tidak ada evaluasi ditemukan untuk guru {info_konteks['nama_guru']} pada tahun ajaran {tahun_ajaran_value}.",
             "info_konteks": info_konteks,
-            "evaluasi_per_matapelajaran": []
+            "evaluasi_per_matapelajaran": [],
+            "evaluasi_keseluruhan_rerata": evaluasi_keseluruhan_rerata
         }, status=status.HTTP_200_OK)
 
     evals_by_mapel = defaultdict(lambda: {
@@ -453,91 +441,169 @@ def get_teacher_evaluation_detail_page(request):
         'kritik_saran_per_siswa': defaultdict(set)
     })
 
+    all_individual_likert_scores_for_konteks = []
+    overall_scores_by_variable_combined = defaultdict(list)
+    overall_scores_by_indicator_combined = defaultdict(lambda: defaultdict(list))
+    
+    # Untuk menghitung jumlah "form evaluasi terisi", yaitu pasangan unik (siswa, mapel)
+    overall_evaluation_form_submissions_set = set() 
+
+    overall_unique_kritik_saran_combined = set()
+    overall_unique_kelas_names_combined = set()
+
+    matapelajaran_ids_in_scope = evaluations_in_scope.values_list('matapelajaran_id', flat=True).distinct()
+    subjects_with_evals_qs = MataPelajaran.objects.filter(
+        pk__in=matapelajaran_ids_in_scope
+    ).prefetch_related('siswa_terdaftar')
+    siswa_terdaftar_counts_map = { s.id: s.siswa_terdaftar.count() for s in subjects_with_evals_qs }
+    
+    all_students_in_evaluated_subjects_ids = set()
+    if subjects_with_evals_qs.exists():
+        for subject in subjects_with_evals_qs:
+            for student in subject.siswa_terdaftar.all():
+                all_students_in_evaluated_subjects_ids.add(student.pk)
+    evaluasi_keseluruhan_rerata["total_siswa_diajar_di_matapelajaran_terevaluasi"] = len(all_students_in_evaluated_subjects_ids)
+
     for ev in evaluations_in_scope:
+        all_individual_likert_scores_for_konteks.append(ev.skorlikert)
+        
+        if hasattr(EvalGuru, 'pilihanvariabel'):
+            overall_scores_by_variable_combined[ev.variabel].append(ev.skorlikert)
+        if hasattr(EvalGuru, 'pilihanindikator'):
+             overall_scores_by_indicator_combined[ev.variabel][ev.indikator].append(ev.skorlikert)
+        
+        overall_evaluation_form_submissions_set.add((ev.siswa_id, ev.matapelajaran_id))
+
+        if ev.kritik_saran and ev.kritik_saran.strip():
+            overall_unique_kritik_saran_combined.add(ev.kritik_saran.strip())
+
+        kelas_siswa_str_ev, _ = get_student_main_class_info(ev.siswa)
+        if kelas_siswa_str_ev != "N/A":
+            overall_unique_kelas_names_combined.add(kelas_siswa_str_ev)
+
         mapel_id = ev.matapelajaran_id
         if evals_by_mapel[mapel_id]['matapelajaran_obj'] is None:
             evals_by_mapel[mapel_id]['matapelajaran_obj'] = ev.matapelajaran
-
         evals_by_mapel[mapel_id]['entries_for_mapel'].append(ev)
+        if kelas_siswa_str_ev != "N/A":
+            evals_by_mapel[mapel_id]['unique_kelas_names'].add(kelas_siswa_str_ev)
+        if ev.kritik_saran and ev.kritik_saran.strip():
+            evals_by_mapel[mapel_id]['kritik_saran_per_siswa'][ev.siswa_id].add(ev.kritik_saran.strip())
+    
+    if all_individual_likert_scores_for_konteks:
+        avg_overall_score_konteks = sum(all_individual_likert_scores_for_konteks) / len(all_individual_likert_scores_for_konteks)
+        info_konteks["skor_rata_rata_keseluruhan_guru"] = f"{avg_overall_score_konteks:.2f} / 5.00"
+    
+    # Menggunakan jumlah form evaluasi yang terisi (pasangan unik siswa-mapel)
+    jumlah_form_terisi = len(overall_evaluation_form_submissions_set)
+    info_konteks["jumlah_form_evaluasi_terisi_keseluruhan"] = jumlah_form_terisi
+    evaluasi_keseluruhan_rerata["jumlah_form_evaluasi_terisi"] = jumlah_form_terisi
+    
+    if overall_unique_kelas_names_combined:
+        evaluasi_keseluruhan_rerata["daftar_kelas_evaluasi_unik_gabungan"] = ", ".join(sorted(list(overall_unique_kelas_names_combined)))
+    
+    temp_ringkasan_skor_variabel_gabungan = {}
+    if hasattr(EvalGuru, 'pilihanvariabel'):
+        for var_choice in EvalGuru.pilihanvariabel:
+            var_id_key = str(var_choice[0])
+            skor_list = overall_scores_by_variable_combined.get(var_choice[0], [])
+            avg_skor = sum(skor_list) / len(skor_list) if skor_list else None
+            temp_ringkasan_skor_variabel_gabungan[var_id_key] = f"{avg_skor:.2f} / 5.00" if avg_skor is not None else "- / 5.00"
+    evaluasi_keseluruhan_rerata["ringkasan_skor_rata_rata_per_variabel_gabungan"] = temp_ringkasan_skor_variabel_gabungan
 
-        kelas_siswa_str, _ = get_student_main_class_info(ev.siswa) # Fungsi ini sudah ada
-        if kelas_siswa_str != "N/A":
-            evals_by_mapel[mapel_id]['unique_kelas_names'].add(kelas_siswa_str)
+    temp_detail_skor_indikator_gabungan = []
+    if hasattr(EvalGuru, 'pilihanvariabel') and hasattr(EvalGuru, 'pilihanindikator'):
+        for var_choice in EvalGuru.pilihanvariabel:
+            var_id_val = var_choice[0]
+            data_per_variabel_gabungan = {"variabel_id": var_id_val}
+            for ind_choice in EvalGuru.pilihanindikator:
+                ind_id_val = ind_choice[0]
+                skor_list = overall_scores_by_indicator_combined.get(var_id_val, {}).get(ind_id_val, [])
+                avg_skor = sum(skor_list) / len(skor_list) if skor_list else None
+                data_per_variabel_gabungan[f"Indikator {ind_id_val}"] = f"{avg_skor:.2f} / 5.00" if avg_skor is not None else "- / 5.00"
+            temp_detail_skor_indikator_gabungan.append(data_per_variabel_gabungan)
+    evaluasi_keseluruhan_rerata["detail_skor_rata_rata_per_indikator_gabungan"] = temp_detail_skor_indikator_gabungan
 
-        if ev.kritik_saran:
-            evals_by_mapel[mapel_id]['kritik_saran_per_siswa'][ev.siswa_id].add(ev.kritik_saran)
+    if overall_unique_kritik_saran_combined:
+        evaluasi_keseluruhan_rerata["daftar_kritik_saran_gabungan"] = sorted(list(overall_unique_kritik_saran_combined))
+        
+    valid_overall_variable_scores_float = []
+    for score_str in temp_ringkasan_skor_variabel_gabungan.values():
+        if " / " in score_str:
+            try:
+                score_val_str = score_str.split(" / ")[0]
+                if score_val_str != '-':
+                    valid_overall_variable_scores_float.append(float(score_val_str))
+            except ValueError: pass
+    if valid_overall_variable_scores_float:
+        avg_grand_total_combined = sum(valid_overall_variable_scores_float) / len(valid_overall_variable_scores_float)
+        evaluasi_keseluruhan_rerata["skor_grand_total_dari_variabel_gabungan"] = f"{avg_grand_total_combined:.2f} / 5.00"
 
     output_evaluasi_per_matapelajaran = []
-
     for mapel_id, data in evals_by_mapel.items():
         matapelajaran_obj = data['matapelajaran_obj']
         entries_for_this_mapel = data['entries_for_mapel']
-
         kelas_display_str = ", ".join(sorted(list(data['unique_kelas_names']))) if data['unique_kelas_names'] else "N/A"
 
-        # Menghitung total pengisi evaluasi unik untuk mata pelajaran ini
-        # Kita menggunakan filter yang sama dengan `evaluations_in_scope` tapi spesifik untuk mapel_id ini
-        # dan menghitung siswa_id yang unik.
         total_pengisi_mapel = EvalGuru.objects.filter(
             guru_id=guru_id,
             matapelajaran_id=matapelajaran_obj.id,
-            matapelajaran__tahunAjaran__tahunAjaran=tahun_ajaran_value # atau filter tahun ajaran siswa jika lebih relevan
+            matapelajaran__tahunAjaran__tahunAjaran=tahun_ajaran_value
         ).values('siswa_id').distinct().count()
 
-        # Menghitung total siswa yang terdaftar di mata pelajaran ini
-        # Ini bergantung pada bagaimana siswa_terdaftar diisi di model MataPelajaran.
-        # Jika siswa_terdaftar di MataPelajaran sudah spesifik untuk tahun ajaran dan guru tersebut, ini cukup.
-        total_siswa_di_mapel = matapelajaran_obj.siswa_terdaftar.count()
+        total_siswa_di_mapel = siswa_terdaftar_counts_map.get(matapelajaran_obj.id, 0)
 
-
-        ringkasan_skor_per_variabel = {}
-        skor_var_temp = defaultdict(list)
+        ringkasan_skor_per_variabel_mapel = {}
+        skor_var_temp_mapel = defaultdict(list)
         for entry in entries_for_this_mapel:
-            skor_var_temp[entry.variabel].append(entry.skorlikert)
+            skor_var_temp_mapel[entry.variabel].append(entry.skorlikert)
 
-        for var_choice in EvalGuru.pilihanvariabel:
-            var_id = var_choice[0]
-            skor_list = skor_var_temp.get(var_id, [])
-            avg_skor = sum(skor_list) / len(skor_list) if skor_list else None
-            ringkasan_skor_per_variabel[str(var_id)] = f"{avg_skor:.2f} / 5.00" if avg_skor is not None else "- / 5.00"
-
-        detail_evaluasi_indikator_list = []
-        skor_var_ind_temp = defaultdict(lambda: defaultdict(list))
-        for entry in entries_for_this_mapel:
-            skor_var_ind_temp[entry.variabel][entry.indikator].append(entry.skorlikert)
-
-        for var_choice in EvalGuru.pilihanvariabel:
-            var_id = var_choice[0]
-            data_per_variabel = {"variabel_id": var_id}
-            for ind_choice in EvalGuru.pilihanindikator:
-                ind_id = ind_choice[0]
-                skor_list = skor_var_ind_temp.get(var_id, {}).get(ind_id, [])
+        if hasattr(EvalGuru, 'pilihanvariabel'):
+            for var_choice in EvalGuru.pilihanvariabel:
+                var_id_key = str(var_choice[0])
+                skor_list = skor_var_temp_mapel.get(var_choice[0], [])
                 avg_skor = sum(skor_list) / len(skor_list) if skor_list else None
-                data_per_variabel[f"Indikator {ind_id}"] = f"{avg_skor:.2f} / 5.00" if avg_skor is not None else "- / 5.00"
-            detail_evaluasi_indikator_list.append(data_per_variabel)
+                ringkasan_skor_per_variabel_mapel[var_id_key] = f"{avg_skor:.2f} / 5.00" if avg_skor is not None else "- / 5.00"
+
+        detail_evaluasi_indikator_list_mapel = []
+        skor_var_ind_temp_mapel = defaultdict(lambda: defaultdict(list))
+        for entry in entries_for_this_mapel:
+            skor_var_ind_temp_mapel[entry.variabel][entry.indikator].append(entry.skorlikert)
+
+        if hasattr(EvalGuru, 'pilihanvariabel') and hasattr(EvalGuru, 'pilihanindikator'):
+            for var_choice in EvalGuru.pilihanvariabel:
+                var_id_val = var_choice[0]
+                data_per_variabel_mapel = {"variabel_id": var_id_val}
+                for ind_choice in EvalGuru.pilihanindikator:
+                    ind_id_val = ind_choice[0]
+                    skor_list = skor_var_ind_temp_mapel.get(var_id_val, {}).get(ind_id_val, [])
+                    avg_skor = sum(skor_list) / len(skor_list) if skor_list else None
+                    data_per_variabel_mapel[f"Indikator {ind_id_val}"] = f"{avg_skor:.2f} / 5.00" if avg_skor is not None else "- / 5.00"
+                detail_evaluasi_indikator_list_mapel.append(data_per_variabel_mapel)
 
         all_kritik_saran_mapel = []
-        for siswa_id_kritik, saran_set in data['kritik_saran_per_siswa'].items(): 
+        for _siswa_id, saran_set in data['kritik_saran_per_siswa'].items(): 
             all_kritik_saran_mapel.extend(list(saran_set))
+        all_kritik_saran_mapel = sorted(list(set(all_kritik_saran_mapel)))
 
         mapel_data_output = {
             "matapelajaran_id": matapelajaran_obj.id,
             "nama_matapelajaran": matapelajaran_obj.nama if hasattr(matapelajaran_obj, 'nama') else "N/A",
-            "total_pengisi_evaluasi": total_pengisi_mapel,
+            "total_pengisi_evaluasi": total_pengisi_mapel, 
             "total_siswa_di_matapelajaran": total_siswa_di_mapel,
             "daftar_kelas_evaluasi": kelas_display_str,
-            "ringkasan_skor_per_variabel": ringkasan_skor_per_variabel,
-            "detail_skor_per_indikator": detail_evaluasi_indikator_list,
+            "ringkasan_skor_per_variabel": ringkasan_skor_per_variabel_mapel,
+            "detail_skor_per_indikator": detail_evaluasi_indikator_list_mapel,
             "daftar_kritik_saran": all_kritik_saran_mapel if all_kritik_saran_mapel else ["Tidak ada kritik/saran untuk mata pelajaran ini."]
         }
         output_evaluasi_per_matapelajaran.append(mapel_data_output)
 
-    # Urutkan berdasarkan nama mata pelajaran jika diperlukan
     output_evaluasi_per_matapelajaran = sorted(output_evaluasi_per_matapelajaran, key=lambda x: x['nama_matapelajaran'])
 
     return JsonResponse({
         "status": status.HTTP_200_OK,
-        "message": "Detail evaluasi guru per mata pelajaran dalam tahun ajaran.",
+        "message": "Detail evaluasi guru: ringkasan, per mata pelajaran, dan rerata gabungan.",
         "info_konteks": info_konteks,
-        "evaluasi_per_matapelajaran": output_evaluasi_per_matapelajaran
+        "evaluasi_per_matapelajaran": output_evaluasi_per_matapelajaran,
+        "evaluasi_keseluruhan_rerata": evaluasi_keseluruhan_rerata
     }, status=status.HTTP_200_OK)
