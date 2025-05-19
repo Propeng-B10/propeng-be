@@ -1573,85 +1573,9 @@ def get_yearly_attendance_summary(request, kelas_id):
             9: "September", 10: "Oktober", 11: "November", 12: "Desember"
         }
 
-        # Find all the week boundaries for the entire year
-        year_weeks = []
-        
-        # Start from January 6th for the first week of January
-        start_date = date(year, 1, 6)
-        
-        # Generate all weeks for the year (Monday-Friday periods)
-        while start_date.year <= year:
-            end_date = start_date + timedelta(days=4)  # Friday
-            
-            # Assign the week to the month that contains more days of the week,
-            # or to the next month if equal (for special cases like Jun-Jul transition)
-            days_in_first_month = 0
-            days_in_second_month = 0
-            current_month = None
-            
-            # Special case for June-July (end of June to beginning of July)
-            if start_date.month == 6 and end_date.month == 7:
-                assigned_month = 7  # Assign to July
-                week_num_in_month = 1  # First week of July
-            else:
-                # Count days in each month for this week
-                test_date = start_date
-                while test_date <= end_date:
-                    if current_month is None:
-                        current_month = test_date.month
-                    
-                    if test_date.month == current_month:
-                        days_in_first_month += 1
-                    else:
-                        days_in_second_month += 1
-                    
-                    test_date += timedelta(days=1)
-                
-                # Assign to month with more days, or second month if equal
-                if days_in_second_month > days_in_first_month:
-                    assigned_month = start_date.month + 1 if start_date.month < 12 else 1
-                else:
-                    assigned_month = start_date.month
-                
-                # Determine the week number in the assigned month
-                # For the first week entirely or partially in the month
-                if assigned_month != start_date.month:
-                    week_num_in_month = 1
-                else:
-                    # Count weeks that started in this month
-                    week_num_in_month = len([w for w in year_weeks if w['month'] == assigned_month and 
-                                          w['year'] == (start_date.year if assigned_month != 1 else year)]) + 1
-            
-            # Add this week to the year_weeks list
-            if start_date.year == year or end_date.year == year:  # Only include weeks in or overlapping with the target year
-                year_weeks.append({
-                    'start': start_date,
-                    'end': end_date,
-                    'month': assigned_month,
-                    'week_num': week_num_in_month,
-                    'year': start_date.year if assigned_month != 1 else year
-                })
-            
-            # Move to next Monday
-            start_date += timedelta(days=7)
-
-        # Debug: Print weeks assigned to each month
-        month_week_counts = {}
-        for w in year_weeks:
-            if w['year'] == year:
-                if w['month'] not in month_week_counts:
-                    month_week_counts[w['month']] = []
-                month_week_counts[w['month']].append(w['week_num'])
-        
-        print(f"Year {year} week assignments by month:")
-        for m in range(1, 13):
-            print(f"Month {m}: {month_week_counts.get(m, [])}")
-
         # 5. Process each month
         for month in range(1, 13):
             try:
-                print(f"Processing month {month} ({indonesian_months[month]})")
-                
                 # Get the date range for this month
                 start_date_month = date(year, month, 1)
                 last_day_of_month = calendar.monthrange(year, month)[1]
@@ -1665,60 +1589,36 @@ def get_yearly_attendance_summary(request, kelas_id):
                     date__week_day__range=(2, 6)  # Mon-Fri
                 ).order_by('date')
 
-                # Debug: Print how many records found
-                record_count = monthly_records.count()
-                print(f"  Found {record_count} attendance records for month {month}")
-
                 # Skip months with no records
                 if not monthly_records.exists():
-                    print(f"  No attendance records found for month {month}, skipping...")
                     continue
 
                 # Initialize monthly totals
                 monthly_total_counts = defaultdict(int)
                 weekly_summaries = []
 
-                # Get weeks for this month from pre-calculated year_weeks
-                month_weeks = [w for w in year_weeks if w['month'] == month and w['year'] == year]
-                print(f"  Found {len(month_weeks)} weeks assigned to month {month}")
-
                 # Group records by week
                 weekly_records = {}
-                for week_data in month_weeks:
-                    week_records = []
-                    for record in monthly_records:
-                        # Add records that fall within this week
-                        if week_data['start'] <= record.date <= week_data['end']:
-                            week_records.append(record)
-                    
-                    if week_records:  # Only add weeks with records
-                        weekly_records[week_data['week_num']] = {
-                            'records': week_records,
-                            'start': week_data['start'],
-                            'end': week_data['end']
-                        }
-                        print(f"  Week {week_data['week_num']} has {len(week_records)} records from {week_data['start']} to {week_data['end']}")
-
-                if not weekly_records:
-                    print(f"  No weekly records grouped for month {month}, skipping...")
-                    continue
+                for record in monthly_records:
+                    week_num = ((record.date.day - 1) // 7) + 1
+                    if week_num not in weekly_records:
+                        weekly_records[week_num] = []
+                    weekly_records[week_num].append(record)
 
                 # Process each week
-                for week_num, week_data in weekly_records.items():
-                    week_records = week_data['records']
-                    week_start = week_data['start']
-                    week_end = week_data['end']
-                    
+                for week_num, week_records in weekly_records.items():
                     if not week_records:
                         continue
 
+                    week_start = week_records[0].date
+                    week_end = week_records[-1].date
                     weekly_total_counts = defaultdict(int)
                     daily_details = {}
 
                     # Initialize daily details for this week (Mon-Fri)
                     current_day = week_start
                     while current_day <= week_end:
-                        if current_day.weekday() < 5:  # Monday to Friday
+                        if current_day.weekday() < 5:
                             date_str = current_day.strftime('%Y-%m-%d')
                             daily_details[date_str] = {
                                 "day_name": indonesian_days[current_day.weekday()],
@@ -1833,7 +1733,6 @@ def get_yearly_attendance_summary(request, kelas_id):
                     "monthly_averages": monthly_averages,
                     "weekly_summaries": weekly_summaries
                 })
-                print(f"  Successfully processed month {month} with {len(weekly_summaries)} weekly summaries")
 
             except Exception as e:
                 print(f"Error processing month {month}: {str(e)}")
@@ -1842,13 +1741,6 @@ def get_yearly_attendance_summary(request, kelas_id):
                 continue
 
         # 6. Prepare final response
-        print(f"Completed processing. Found summaries for {len(monthly_summaries)} months")
-        for i, summary in enumerate(monthly_summaries):
-            month_number = summary['month_info']['monthNumber']
-            month_name = summary['month_info']['monthName']
-            week_count = len(summary['weekly_summaries'])
-            print(f"  {i+1}. Month {month_number} ({month_name}): {week_count} weeks")
-
         response_data = {
             "kelas_info": {
                 "id": kelas.id,
