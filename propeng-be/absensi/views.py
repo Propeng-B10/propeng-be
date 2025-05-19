@@ -1671,12 +1671,25 @@ def get_yearly_attendance_summary(request, kelas_id):
                     else:
                         weekly_averages = {status: 0.0 for status in possible_statuses}
 
+                    # Format the display date range
+                    start_day = week_start.day
+                    end_day = week_end.day
+                    start_month_name = indonesian_months[week_start.month]
+                    end_month_name = indonesian_months[week_end.month]
+                    
+                    if week_start.month == week_end.month:
+                        # Same month: "6 - 10 January"
+                        display_date_range = f"{start_day} - {end_day} {start_month_name}"
+                    else:
+                        # Different months: "31 March - 4 April"
+                        display_date_range = f"{start_day} {start_month_name} - {end_day} {end_month_name}"
+
                     # Add weekly summary
                     weekly_summaries.append({
                         "week_info": {
                             "startDate": week_start.strftime('%Y-%m-%d'),
                             "endDate": week_end.strftime('%Y-%m-%d'),
-                            "displayWeek": f"Minggu {week_num}"
+                            "displayWeek": f"Minggu {week_num}: {display_date_range}"
                         },
                         "weekly_averages": weekly_averages,
                         "daily_details": sorted(
@@ -1722,7 +1735,9 @@ def get_yearly_attendance_summary(request, kelas_id):
                 })
 
             except Exception as e:
-                print(f"Error processing month {month}: {e}")
+                print(f"Error processing month {month}: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 continue
 
         # 6. Prepare final response
