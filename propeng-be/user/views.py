@@ -37,6 +37,13 @@ class IsTeacherRole(BasePermission):
     """
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and request.user.role == 'teacher')
+    
+class IsStudentRole(BasePermission):
+    """
+    only allow users with role 'admin' to access the view.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.role == 'student')
 
 
 class ChangePasswordView(APIView):

@@ -465,6 +465,161 @@ def create_deployment_info(sender, **kwargs):
          traceback.print_exc()
 
 
+# --- NEW SIGNAL HANDLER FOR GENERATING GRADES/NILAI AND MATA PELAJARAN MINAT ---
+def populate_dummy_grades_signal_handler(sender, **kwargs):
+    """
+    Signal handler to populate dummy grades (nilai) for students.
+    Generates random scores for each student in each mata pelajaran,
+    and creates Mata Pelajaran Minat (elective subjects) with student enrollments.
+    """
+    print("\n--- Running Enhanced Grade and Elective Subject Population Handler ---")
+    try:
+        # --- IMPORTS MOVED INSIDE THIS FUNCTION ---
+        import random
+        from django.utils import timezone
+        from datetime import date
+        
+        # Get models using apps.get_model for safety
+        Student = apps.get_model('user', 'Student')
+        Teacher = apps.get_model('user', 'Teacher')
+        MataPelajaran = apps.get_model('matapelajaran', 'MataPelajaran')
+        Nilai = apps.get_model('nilai', 'Nilai')
+        KomponenPenilaian = apps.get_model('komponenpenilaian', 'KomponenPenilaian')
+        TahunAjaran = apps.get_model('tahunajaran', 'TahunAjaran')
+        Angkatan = apps.get_model('tahunajaran', 'Angkatan')
+        User = apps.get_model('user', 'User')
+        # --- END IMPORTS ---
+        
+        # Check if prerequisite data exists
+        students = Student.objects.all()
+        teachers = Teacher.objects.all()
+        
+        if not students.exists() or not teachers.exists():
+            print("Students or Teachers not found. Skipping grade population.")
+            return
+            
+        print(f"Found {students.count()} students and {teachers.count()} teachers.")
+        
+        # Get or create current TahunAjaran and Angkatan
+        current_year = timezone.now().year
+        tahun_ajaran, _ = TahunAjaran.objects.get_or_create(tahunAjaran=current_year)
+        angkatan_2023, _ = Angkatan.objects.get_or_create(angkatan=2023)
+        
+        # PART 1: Create additional Mata Pelajaran Minat (elective subjects) if they don't exist
+        minat_subjects = [
+            "Bahasa Jerman", "Bahasa Mandarin", "Seni Musik", "Seni Rupa", 
+            "Desain Grafis", "Sastra Indonesia", "Astronomi", "Psikologi", 
+            "Teknik Komputer", "Entrepreneurship"
+        ]
+        
+        created_minat_subjects = []
+        for idx, subject_name in enumerate(minat_subjects):
+            # Check if this subject already exists
+            existing = MataPelajaran.objects.filter(nama=subject_name).first()
+            if existing:
+                created_minat_subjects.append(existing)
+                continue
+                
+            # Create new subject with kategoriMatpel = 'Peminatan'
+            teacher = teachers[idx % len(teachers)]  # Rotate through available teachers
+            subject = MataPelajaran.objects.create(
+                nama=subject_name,
+                kategoriMatpel="Peminatan",
+                tahunAjaran=tahun_ajaran,
+                angkatan=angkatan_2023,
+                teacher=teacher
+            )
+            created_minat_subjects.append(subject)
+            print(f"Created elective subject: {subject_name} with teacher {teacher.name}")
+        
+        # PART 2: Assign students to elective subjects (each student takes 2-4 electives)
+        for student in students:
+            # How many electives will this student take?
+            num_electives = random.randint(2, 4)
+            # Randomly select that many elective subjects
+            selected_subjects = random.sample(created_minat_subjects, num_electives)
+            
+            for subject in selected_subjects:
+                # Add student to the subject's enrollment
+                subject.siswa_terdaftar.add(student)
+                print(f"Enrolled student {student.name} in elective {subject.nama}")
+        
+        # PART 3: Create KomponenPenilaian for all subjects (existing and new)
+        all_subjects = MataPelajaran.objects.all()
+        
+        # Define evaluation components to create for each subject
+        komponen_templates = [
+            # Pengetahuan components
+            {"nama": "Tugas Harian", "tipe": "Pengetahuan", "bobot": 20},
+            {"nama": "Ulangan Harian", "tipe": "Pengetahuan", "bobot": 20},
+            {"nama": "Ujian Tengah Semester", "tipe": "Pengetahuan", "bobot": 25},
+            {"nama": "Ujian Akhir Semester", "tipe": "Pengetahuan", "bobot": 35},
+            # Keterampilan components
+            {"nama": "Praktikum", "tipe": "Keterampilan", "bobot": 30},
+            {"nama": "Proyek", "tipe": "Keterampilan", "bobot": 40},
+            {"nama": "Presentasi", "tipe": "Keterampilan", "bobot": 30}
+        ]
+        
+        for subject in all_subjects:
+            print(f"Creating evaluation components for {subject.nama}...")
+            
+            # Create all components for this subject
+            for komponen_template in komponen_templates:
+                komponen, created = KomponenPenilaian.objects.get_or_create(
+                    namaKomponen=komponen_template["nama"],
+                    mataPelajaran=subject,
+                    tipeKomponen=komponen_template["tipe"],
+                    defaults={
+                        "bobotKomponen": komponen_template["bobot"]
+                    }
+                )
+                
+                if created:
+                    print(f"  Created component: {komponen.namaKomponen} ({komponen.tipeKomponen})")
+                
+                # PART 4: Create grades for each student in this component
+                # Only consider students enrolled in this subject
+                enrolled_students = list(subject.siswa_terdaftar.all())
+                
+                # If no students are explicitly enrolled, assume all students take the class
+                if not enrolled_students and subject.kategoriMatpel == "Wajib":
+                    enrolled_students = list(students)
+                
+                for student in enrolled_students:
+                    # Generate random score based on component type
+                    if komponen.tipeKomponen == "Pengetahuan":
+                        if komponen.namaKomponen == "Ujian Akhir Semester":
+                            # Higher scores for final exams
+                            score = random.uniform(70.0, 95.0)
+                        else:
+                            score = random.uniform(65.0, 90.0)
+                    else:  # Keterampilan usually has higher scores
+                        score = random.uniform(75.0, 98.0)
+                    
+                    # Round to 2 decimal places
+                    score = round(score, 2)
+                    
+                    # Create or update the grade
+                    nilai, created = Nilai.objects.get_or_create(
+                        student=student.user,  # Nilai links to User, not Student
+                        komponen=komponen,
+                        defaults={"nilai": score}
+                    )
+                    
+                    if not created:
+                        # Update existing nilai
+                        nilai.nilai = score
+                        nilai.save()
+        
+        print("--- Enhanced Grade and Elective Subject Population Handler Finished ---")
+        
+    except Exception as e:
+        print(f"An error occurred within the Grade Population Signal Handler: {e}")
+        import traceback
+        traceback.print_exc()
+        print("--- Grade Population Signal Handler Failed ---")
+
+
 class UserConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'user'
@@ -477,4 +632,6 @@ class UserConfig(AppConfig):
         post_migrate.connect(populate_dummy_attendance_signal_handler, sender=self)
         # Connect deployment info handler
         post_migrate.connect(create_deployment_info, sender=self)
+        # Connect the NEW grade population handler
+        post_migrate.connect(populate_dummy_grades_signal_handler, sender=self)
 

@@ -1,5 +1,5 @@
 from django.http import JsonResponse
-from evalguru.models import EvalGuru
+from evalguru.models import *
 from matapelajaran.models import MataPelajaran
 from user.models import Teacher, Student
 from kelas.models import Kelas 
@@ -9,6 +9,10 @@ from collections import defaultdict
 from rest_framework.decorators import api_view
 from django.db import transaction
 from rest_framework import status
+from rest_framework.throttling import AnonRateThrottle
+from rest_framework.decorators import permission_classes
+from rest_framework.permissions import IsAuthenticated
+from user.views import IsStudentRole
 
 
 def get_student_main_class_info(student_obj):
@@ -539,3 +543,67 @@ def get_teacher_evaluation_detail_page(request):
         "info_konteks": info_konteks,
         "evaluasi_per_matapelajaran": output_evaluasi_per_matapelajaran
     }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsStudentRole])
+def get_cek_kelas(request, pk):
+    try:
+        siswa_id = request.user.id
+        siswa_obj = Student.objects.get(pk=siswa_id)
+        matpel_obj = MataPelajaran.objects.get(pk=pk)
+        if isianEvalGuru.objects.filter(siswa=siswa_obj, matapelajaran=matpel_obj).exists():
+            return JsonResponse({"status": status.HTTP_200_OK, "message": "Siswa sudah mengisi evaluasi untuk mata pelajaran ini."}, status=status.HTTP_200_OK)
+        else:
+            return JsonResponse({"status": status.HTTP_400_BAD_REQUEST, "message": "Siswa belum mengisi evaluasi untuk mata pelajaran ini."}, status=status.HTTP_400_BAD_REQUEST)
+    except Student.DoesNotExist:
+        return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": "Siswa tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+    except Kelas.DoesNotExist:
+        return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": "Kelas tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+    
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsStudentRole])
+def create_evalguru(request):
+    try:
+        data = request.data
+        print("Data yang diterima:", data)  # Debugging line
+        print(request.user)
+        if not request.user.role != 'Student':
+            return JsonResponse({"status": status.HTTP_403_FORBIDDEN, "message": "Hanya siswa yang dapat mengisi evaluasi."}, status=status.HTTP_403_FORBIDDEN)
+        isian = data.get('isian')
+        if not isian:
+            return JsonResponse({"status": status.HTTP_400_BAD_REQUEST, "message": "Data isian tidak ditemukan."}, status=status.HTTP_400_BAD_REQUEST)
+        # isian -> {"1":{"1":3,"2":4}, "2":{1:5,"2":3}}
+        kritik_saran = data.get('kritik_saran')
+        siswa_id = request.user.id
+        matapelajaran_id = data.get('matapelajaran_id')
+        siswa_obj = Student.objects.get(pk=siswa_id)
+        matapelajaran_obj = MataPelajaran.objects.get(pk=matapelajaran_id)
+        guru_obj = matapelajaran_obj.teacher
+        if guru_obj is None:    
+            return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": "Guru tidak ditemukan untuk mata pelajaran ini."}, status=status.HTTP_404_NOT_FOUND)
+        if not siswa_obj or not guru_obj or not matapelajaran_obj:
+            return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": "Siswa, guru, atau mata pelajaran tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+        
+        existing_evaluations = isianEvalGuru.objects.filter(
+            siswa=siswa_obj,
+            guru=guru_obj,
+            matapelajaran=matapelajaran_obj
+        )
+        if existing_evaluations.exists():
+            return JsonResponse({"status": status.HTTP_400_BAD_REQUEST, "message": "Anda sudah mengisi evaluasi untuk guru ini di mata pelajaran ini."}, status=status.HTTP_400_BAD_REQUEST)
+
+        evaluasi_guru = isianEvalGuru.objects.create(
+            siswa=siswa_obj,
+            guru=guru_obj,
+            matapelajaran=matapelajaran_obj,
+            isian=isian,
+            kritik_saran=kritik_saran
+        )
+
+        return JsonResponse({"status": status.HTTP_201_CREATED, "message": "Evaluasi guru berhasil dibuat.", "evaluasi_id": evaluasi_guru.id}, status=status.HTTP_201_CREATED)
+    except Student.DoesNotExist:
+        return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": "Siswa tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return JsonResponse({"status": status.message, "message": f"Terjadi kesalahan: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
