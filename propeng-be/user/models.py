@@ -1,3 +1,4 @@
+from datetime import date
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from tahunajaran.models import TahunAjaran, Angkatan
@@ -53,10 +54,21 @@ class Student(models.Model):
         # Sync username with User model before saving
         if self.user:
             self.username = self.user.username
+
+
+        # Set expiredAt ke 1 Juli tahun setelah tahunAjaran
+        if TahunAjaran.tahunAjaran and not self.expiredAt:
+            self.expiredAt = date(TahunAjaran.tahunAjaran.tahunAjaran + 1, 7, 1)
+
+        # Jika tanggal sekarang sudah melewati expiredAt, set isActive = False
+        if self.expiredAt and date.today() >= self.expiredAt:
+            self.isActive = False
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.user.username}"
+    
+    
 
 class Teacher(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
