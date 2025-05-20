@@ -38,6 +38,7 @@ class Kelas(models.Model):
         # Jika tanggal sekarang sudah melewati expiredAt, set isActive = False
         if self.expiredAt and date.today() >= self.expiredAt:
             self.isActive = False
+
         super().save(*args, **kwargs)
 
     def generate_kode(self):

@@ -1,7 +1,5 @@
-from datetime import date
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from kelas.models import Kelas
 from tahunajaran.models import TahunAjaran, Angkatan
 from django.utils import timezone
 
@@ -55,13 +53,10 @@ class Student(models.Model):
         # Sync username with User model before saving
         if self.user:
             self.username = self.user.username
-
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.user.username}"
-    
-    
 
 class Teacher(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)

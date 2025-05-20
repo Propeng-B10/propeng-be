@@ -360,14 +360,6 @@ def list_active_student(request):
         student_list = []
         
         for student in students:
-            # Ambil semua kelas yang tertaut ke siswa
-            kelas_terkait = student.siswa.all()  
-
-            # Jika siswa terdaftar di kelas DAN semua kelasnya tidak aktif
-            if kelas_terkait.exists() and not kelas_terkait.filter(isActive=True).exists():
-                student.isActive = True
-                student.save(update_fields=['isActive'])
-
             student_data = {
                 "id": student.user_id,
                 "name": student.name,
