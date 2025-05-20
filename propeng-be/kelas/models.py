@@ -39,18 +39,6 @@ class Kelas(models.Model):
         if self.expiredAt and date.today() >= self.expiredAt:
             self.isActive = False
 
-        # Ambil semua kelas tempat siswa ini terdaftar
-        kelas_terdaftar = Kelas.objects.filter(siswa=self)
-
-        if not kelas_terdaftar.exists():
-            self.isAssignedtoClass = False
-        else:
-            # Cek apakah semua kelas tidak aktif atau terhapus
-            if all(not k.isActive or k.isDeleted for k in kelas_terdaftar):
-                self.isAssignedtoClass = False
-            else:
-                self.isAssignedtoClass = True
-
         super().save(*args, **kwargs)
 
     def generate_kode(self):
