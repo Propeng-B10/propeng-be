@@ -8,7 +8,7 @@ from matapelajaran.models import MataPelajaran
 from tahunajaran.models import TahunAjaran
 import re
 from rest_framework.permissions import IsAuthenticated, BasePermission
-from django.db.models import Q  
+from django.db.models import Q, Count
 from tahunajaran.models import Angkatan
 from absensi.models import *
 
