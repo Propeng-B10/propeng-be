@@ -44,6 +44,7 @@ def list_available_student_by_angkatan(request, angkatan):
 
         print(angkatanObj.angkatan)
         print(angkatanObj.id)
+            
         siswa_dalam_kelas_yang_ga_aktif = Student.objects.filter(
             isActive=True,
             isDeleted=False,
@@ -63,20 +64,6 @@ def list_available_student_by_angkatan(request, angkatan):
                 "errorMessage": f"Tidak ada siswa yang tersedia untuk angkatan {angkatan}."
             }, status=404)
 
-        # Jika siswa terdaftar pada kelas yang tidak aktif, maka isAssignedtoClass = False
-        # Update isAssignedtoClass untuk siswa yang terdaftar di kelas yang tidak aktif
-        for siswa in siswa_dalam_kelas_yang_ga_aktif:
-            kelas_terdaftar = Kelas.objects.filter(siswa=siswa)
-            if not kelas_terdaftar.exists():
-                siswa.isAssignedtoClass = False
-            else:
-                # Cek apakah semua kelas tidak aktif atau terhapus
-                if all(not k.isActive or k.isDeleted for k in kelas_terdaftar):
-                    siswa.isAssignedtoClass = False
-                else:
-                    siswa.isAssignedtoClass = True
-            siswa.save()
-            
         return JsonResponse({
             "status": 200,
             "message": f"Daftar siswa yang tersedia untuk angkatan {angkatan}",
