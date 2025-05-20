@@ -48,14 +48,6 @@ def list_available_student_by_angkatan(request, angkatan):
             angkatan=angkatanObj.id
         )
 
-        # Cek apakah mereka ada di kelas yang tidak aktif
-        for siswa in semua_siswa_angkatan:
-            kelas_terkait = siswa.siswa.all()  # ganti jika related_name-nya bukan 'siswa'
-            if kelas_terkait.filter(isActive=False).exists():
-                if not siswa.isActive:
-                    siswa.isActive = True
-                    siswa.save()
-
         print(angkatanObj.angkatan)
         print(angkatanObj.id)
         siswa_dalam_kelas_yang_ga_aktif = Student.objects.filter(
