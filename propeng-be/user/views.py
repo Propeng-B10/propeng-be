@@ -361,7 +361,6 @@ def list_active_student(request):
         
         if students.kelas.isActive == False:
             students = students.kelas.filter(isActive=False, isDeleted=False)
-        students.kelas.filter(isActive=False, isDeleted=False)
         for student in students:
             student_data = {
                 "id": student.user_id,
