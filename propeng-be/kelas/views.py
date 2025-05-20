@@ -76,19 +76,21 @@ def list_available_student_by_angkatan(request, angkatan):
                 isActive=True,
                 isDeleted=False
             ).count()
+
+            inactive_classes_count_but_not_deleted = Kelas.objects.filter(
+                siswa=student,
+                isActive=False,
+                isDeleted=False
+            ).count()
             
             if student.isAssignedtoClass and active_classes_count == 0:
-                # Siswa ditandai 'isAssignedtoClass=True' tapi tidak punya kelas aktif.
-                # Jadi, dia seharusnya 'available'.
                 students_to_update_ids.append(student.user_id)
             elif not student.isAssignedtoClass and active_classes_count > 0:
-                # Siswa ditandai 'isAssignedtoClass=False' tapi punya kelas aktif.
-                # Ini adalah inkonsistensi data, seharusnya 'isAssignedtoClass=True'.
-                # Untuk endpoint ini, kita tidak mengubahnya menjadi True, karena tujuannya
-                # adalah mencari yang available. Siswa ini tidak available.
                 pass
-
-
+            
+            if student.isAssignedtoClass and inactive_classes_count_but_not_deleted > 0:
+                students_to_update_ids.append(student.user_id)  
+                
         if students_to_update_ids:
             Student.objects.filter(user_id__in=students_to_update_ids).update(isAssignedtoClass=False)
             print(f"Updated {len(students_to_update_ids)} students' isAssignedtoClass to False.")
