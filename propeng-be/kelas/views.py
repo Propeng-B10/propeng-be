@@ -42,6 +42,23 @@ def list_available_student_by_angkatan(request, angkatan):
                 "errorMessage": f"Tidak terdapat angkatan tersebut ({angkatan}) pada sistem."
             }, status=404)
 
+        # Ambil semua siswa (yang tidak dihapus) dalam angkatan yang ditentukan
+        students_in_angkatan_for_rule_check = Student.objects.filter(
+            angkatan=angkatanObj,
+            isDeleted=False
+        ).prefetch_related('siswa')  
+
+        for student_to_check in students_in_angkatan_for_rule_check:
+            # Periksa apakah siswa terdaftar di kelas mana pun yang tidak aktif
+            # student_to_check.siswa.all() akan memberikan semua instance Kelas untuk siswa tersebut.
+            # Kita perlu memeriksa apakah ada di antaranya yang memiliki isActive=False.
+            if student_to_check.siswa.filter(isActive=False).exists():
+                # Jika siswa ada di setidaknya satu kelas yang tidak aktif,
+                # pastikan student_to_check.isActive adalah True.
+                if not student_to_check.isActive:  # Optimasi: hanya simpan jika nilainya berubah
+                    student_to_check.isActive = True
+                    student_to_check.save(update_fields=['isActive'])
+
         print(angkatanObj.angkatan)
         print(angkatanObj.id)
         siswa_dalam_kelas_yang_ga_aktif = Student.objects.filter(
