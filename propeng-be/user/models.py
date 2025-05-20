@@ -1,6 +1,7 @@
 from datetime import date
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from kelas.models import Kelas
 from tahunajaran.models import TahunAjaran, Angkatan
 from django.utils import timezone
 
@@ -55,15 +56,9 @@ class Student(models.Model):
         if self.user:
             self.username = self.user.username
 
-
-        # Set expiredAt ke 1 Juli tahun setelah tahunAjaran
-        if TahunAjaran.tahunAjaran and not self.expiredAt:
-            self.expiredAt = date(TahunAjaran.tahunAjaran.tahunAjaran + 1, 7, 1)
-
-        # Jika tanggal sekarang sudah melewati expiredAt, set isActive = False
-        if self.expiredAt and date.today() >= self.expiredAt:
+        if Kelas.objects.filter(siswa=self).exists() and Kelas.isActive == False:
             self.isActive = False
-        super().save(*args, **kwargs)
+            self.isAssignedtoClass = False
 
     def __str__(self):
         return f"{self.user.username}"
