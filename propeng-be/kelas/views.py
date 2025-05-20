@@ -8,7 +8,7 @@ from matapelajaran.models import MataPelajaran
 from tahunajaran.models import TahunAjaran
 import re
 from rest_framework.permissions import IsAuthenticated, BasePermission
-from django.db.models import Q  
+from django.db.models import Q, Exists, OuterRef
 from tahunajaran.models import Angkatan
 from absensi.models import *
 
@@ -23,114 +23,92 @@ class IsTeacherRole(BasePermission):
 '''
 Cek Siswa Tertentu pada Suatu Angkatan
 '''
-
 @api_view(['GET'])
 def list_available_student_by_angkatan(request, angkatan):
-    """List students who are NOT assigned to any ACTIVE class for a given batch.
-    Updates isAssignedtoClass to False for students only in inactive/deleted classes.
+    """
+    List students who are NOT assigned to any ACTIVE and NON-DELETED class for a given batch.
+    This includes students who are:
+    1. Not assigned to any class at all (student.isAssignedtoClass = False).
+    2. Assigned only to classes that are inactive (kelas.isActive = False)
+       OR deleted (kelas.isDeleted = True).
     """
     try:
         # Normalisasi angkatan (misal: 23 → 2023, 2023 → tetap 2023)
-        angkatan_input = angkatan
-        angkatan = int(angkatan)
-        if angkatan < 100:
-            angkatan += 2000
-        
         try:
-            # Menggunakan get, karena kita berasumsi angkatan harus sudah ada.
-            # Jika bisa dibuat otomatis, get_or_create bisa dipertahankan.
-            angkatanObj = Angkatan.objects.get(angkatan=angkatan)
+            angkatan_val = int(angkatan)
+            if angkatan_val < 100:
+                angkatan_val += 2000
+        except ValueError:
+            return JsonResponse({
+                "status": 400,
+                "errorMessage": "Format angkatan tidak valid. Harap masukkan tahun (misal: 2023 atau 23)."
+            }, status=400)
+
+        try:
+            # Sebaiknya gunakan get() jika angkatan wajib ada, dan tangani DoesNotExist
+            angkatan_obj = Angkatan.objects.get(angkatan=angkatan_val)
         except Angkatan.DoesNotExist:
             return JsonResponse({
                 "status": 404,
-                "errorMessage": f"Tidak terdapat angkatan {angkatan} ({angkatan_input}) pada sistem."
+                "errorMessage": f"Tidak terdapat angkatan {angkatan_val} pada sistem."
             }, status=404)
 
-        # Langkah 1: Dapatkan semua siswa aktif & tidak dihapus di angkatan ini
-        students_in_angkatan = Student.objects.filter(
-            angkatan=angkatanObj,
+        # Subquery untuk mengecek apakah seorang siswa terhubung dengan kelas yang aktif dan tidak dihapus
+        active_non_deleted_class_exists = Kelas.objects.filter(
+            siswa=OuterRef('pk'), # Merujuk ke Student instance dari query utama
             isActive=True,
             isDeleted=False
         )
 
-        students_to_update_ids = []
-
-        for student in students_in_angkatan:
-            # Periksa apakah siswa ini memiliki kelas aktif yang terkait
-            # Menggunakan related_name dari Kelas.siswa ke Student.
-            # Jika Kelas.siswa = models.ManyToManyField(Student, related_name='kelas_diikuti'),
-            # maka di sini student.kelas_diikuti.filter(...)
-            # Berdasarkan model Anda: Kelas.siswa = models.ManyToManyField(Student, related_name='siswa')
-            # Ini berarti dari Student, reverse accessornya adalah 'siswa' juga.
-            # Ini bisa membingungkan. Idealnya related_name berbeda.
-            # Mari kita asumsikan 'student.siswa' adalah manager untuk Kelas.
-            
-            # Untuk mendapatkan kelas yang diikuti siswa:
-            # Kelas.objects.filter(siswa=student, isActive=True, isDeleted=False)
-            # atau jika related_name di Student.kelas adalah 'daftar_kelas' maka student.daftar_kelas.all()
-            # Dengan asumsi struktur model Anda dan M2M di `Kelas.siswa` dengan `related_name='siswa'`
-            # maka dari objek `student`, `student.siswa` merujuk ke `KelasManager`.
-            
-            active_classes_count = Kelas.objects.filter(
-                siswa=student, # Ini akan mencari Kelas yang memiliki student ini di M2M 'siswa'
-                isActive=True,
-                isDeleted=False
-            ).count()
-
-            inactive_classes_count_but_not_deleted = Kelas.objects.filter(
-                siswa=student,
-                isActive=False,
-                isDeleted=False
-            ).count()
-            
-            if student.isAssignedtoClass and active_classes_count == 0:
-                students_to_update_ids.append(student.user_id)
-            elif not student.isAssignedtoClass and active_classes_count > 0:
-                pass
-            
-            if student.isAssignedtoClass and inactive_classes_count_but_not_deleted > 0:
-                students_to_update_ids.append(student.user_id)  
-                
-        if students_to_update_ids:
-            Student.objects.filter(user_id__in=students_to_update_ids).update(isAssignedtoClass=False)
-            print(f"Updated {len(students_to_update_ids)} students' isAssignedtoClass to False.")
-
-        # Langkah 2: Ambil siswa yang sekarang benar-benar tersedia
+        # Ambil siswa yang:
+        # - Aktif dan tidak dihapus
+        # - Sesuai dengan angkatan yang dicari
+        # - DAN TIDAK terhubung dengan kelas manapun yang aktif dan tidak dihapus
+        #   Ini secara implisit mencakup siswa dengan isAssignedtoClass=False
+        #   dan siswa yang isAssignedtoClass=True tetapi semua kelasnya tidak aktif/dihapus.
         available_students = Student.objects.filter(
             isActive=True,
             isDeleted=False,
-            angkatan=angkatanObj, # sudah menggunakan objek Angkatan
-            isAssignedtoClass=False
-        ).order_by('name') # Urutkan berdasarkan nama untuk konsistensi
+            angkatan=angkatan_obj
+        ).annotate(
+            has_active_class=Exists(active_non_deleted_class_exists)
+        ).filter(
+            has_active_class=False
+        ).distinct()
+
 
         if not available_students.exists():
             return JsonResponse({
                 "status": 404,
-                "errorMessage": f"Tidak ada siswa yang tersedia untuk angkatan {angkatan}."
+                "errorMessage": f"Tidak ada siswa yang tersedia untuk angkatan {angkatan_val}."
             }, status=404)
 
         return JsonResponse({
             "status": 200,
-            "message": f"Daftar siswa yang tersedia untuk angkatan {angkatan}",
+            "message": f"Daftar siswa yang tersedia untuk angkatan {angkatan_val}",
             "data": [
                 {
-                    "id": s.user.id,
+                    "id": s.user.id, # Asumsi Student memiliki relasi 'user' OneToOne ke User model
                     "name": s.name,
+                    # isAssignedtoClass di sini akan merefleksikan status aktual di DB.
+                    # Ketersediaan siswa untuk diassign ditentukan oleh logika query di atas.
                     "isAssignedtoClass": s.isAssignedtoClass,
                     "nisn": s.nisn,
-                    "username": s.username,
-                    "angkatan": s.angkatan.angkatan # Ambil nilai angkatan dari objek angkatan
+                    "username": s.username, # Asumsi Student memiliki field username
+                    "angkatan": s.angkatan.angkatan # Asumsi Student memiliki FK ke Angkatan
                 } for s in available_students
             ]
         }, status=200)
 
-    except ValueError: # Menangkap jika 'angkatan' tidak bisa diubah jadi integer
-        return JsonResponse({
-            "status": 400,
-            "errorMessage": "Format angkatan tidak valid."
-        }, status=400)
     except Exception as e:
-        print(f"Error in list_available_student_by_angkatan: {str(e)}") # Logging error
+        # Sebaiknya log error di sini untuk debugging
+        # import logging
+        # logging.error(f"Error in list_available_student_by_angkatan: {str(e)}", exc_info=True)
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan pada server: {str(e)}"
+        }, status=500)
+
 
 @api_view(['POST'])
 def add_siswa_to_kelas(request, kelas_id):
