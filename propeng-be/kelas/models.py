@@ -7,7 +7,7 @@ from tahunajaran.models import TahunAjaran
 from django.utils import timezone
 from datetime import date, timedelta
 from absensi.models import AbsensiHarian
-
+    
 class Kelas(models.Model):
     namaKelas = models.CharField(max_length=100)    
     tahunAjaran = models.ForeignKey(TahunAjaran, on_delete=models.SET_NULL, null=True, blank=True)           
@@ -39,6 +39,11 @@ class Kelas(models.Model):
         if self.expiredAt and date.today() >= self.expiredAt:
             self.isActive = False
 
+        # Jika siswa berada di kelas (dalam arti lain siswa.isAssignedtoClass = true) yang tidak aktif dan isdeleted = false, maka set isAssignedtoClass = false
+        for siswa in self.siswa.all():
+            if not self.isActive and not self.isDeleted:
+                siswa.isAssignedtoClass = False
+                siswa.save()
         super().save(*args, **kwargs)
 
     def generate_kode(self):
