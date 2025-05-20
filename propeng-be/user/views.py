@@ -362,6 +362,17 @@ def list_active_student(request):
         if students.kelas.isActive == False:
             students = students.kelas.filter(isActive=False, isDeleted=False)
         for student in students:
+            # Ambil semua kelas yang tertaut ke siswa
+            kelas_terkait = student.siswa.all()  # `siswa` adalah related_name dari Kelas ke Student
+
+            # Cek apakah ada kelas tidak aktif
+            if kelas_terkait.filter(isActive=False).exists():
+                student.isActive = False
+                student.save(update_fields=['isActive'])
+            else:
+                # Pastikan siswa aktif jika tidak ada kelas tidak aktif
+                student.isActive = True
+                student.save(update_fields=['isActive'])
             student_data = {
                 "id": student.user_id,
                 "name": student.name,

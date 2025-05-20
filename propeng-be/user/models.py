@@ -57,7 +57,7 @@ class Student(models.Model):
             self.username = self.user.username
 
         if Kelas.objects.filter(siswa=self).exists() and Kelas.isActive == False:
-            self.isActive = False
+            self.isActive = True
             self.isAssignedtoClass = False
 
     def __str__(self):
