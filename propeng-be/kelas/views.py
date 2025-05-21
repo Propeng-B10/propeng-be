@@ -971,6 +971,7 @@ def get_teacher_kelas(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsTeacherRole])
 def get_teacher_all_kelas(request):
+    print("debug get teacher all kelas")
     """
     Return only the classes where the current teacher is assigned as homeroom teacher
     and that are currently active
@@ -978,6 +979,7 @@ def get_teacher_all_kelas(request):
     try:
         # Get the current teacher user
         current_user = request.user
+        print("disini current user")
         
         # Find the teacher object for the current user
         try:
@@ -993,8 +995,17 @@ def get_teacher_all_kelas(request):
             waliKelas=teacher,
             isDeleted=False
         ).order_by('-updatedAt')
-        
-        if not teacher_classes.exists():
+        print(teacher_classes)
+        print("disini teacher classes COK")
+        print(teacher_classes)
+        print("wow")
+        for i in teacher_classes:
+            print(i.namaKelas)
+            print(i.waliKelas)
+            print(i.siswa.all())
+            print(i.siswa.count())
+        print("disini teacher classes abis for")    
+        if len(teacher_classes) == 0:
             return JsonResponse({
                 "status": 404,
                 "message": "Anda tidak menjadi wali kelas untuk kelas aktif manapun saat ini."

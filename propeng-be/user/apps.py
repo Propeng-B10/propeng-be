@@ -366,10 +366,31 @@ def ensure_admin_exists_and_populate_data(sender, **kwargs):
     
     # Add students to class
     for student in students:
+        if student.name == "Arshad Student" or student.name == "Michelle Student":
+            continue
         kelas.siswa.add(student)
         student.isAssignedtoClass = True
         student.save()
     
+    import datetime
+
+    kelas2 = Kelas.objects.create(
+        namaKelas="kelas coba coba aktif tahun lalu",
+        tahunAjaran=kelas_data["tahunAjaran"],
+        waliKelas=teachers[1],
+        angkatan=kelas_data["angkatan"],
+        createdAt = datetime.datetime.now() - datetime.timedelta(days=1365),
+        updatedAt = datetime.datetime.now() - datetime.timedelta(days=1365),
+        expiredAt = datetime.date.today() - datetime.timedelta(days=1000)
+    )
+    teachers[1].homeroomId_id = kelas2.id # Use .id
+    teachers[1].save()
+    for student in students: 
+        if student.name == "Arshad Student" or student.name == "Michelle Student":
+            kelas2.siswa.add(student)
+            student.isAssignedtoClass = True
+            student.save()
+        
     
     print(f'Created kelas: {kelas.namaKelas}')
     print('Database population completed!')
