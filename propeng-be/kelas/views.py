@@ -8,7 +8,7 @@ from matapelajaran.models import MataPelajaran
 from tahunajaran.models import TahunAjaran
 import re
 from rest_framework.permissions import IsAuthenticated, BasePermission
-from django.db.models import Q  
+from django.db.models import Q, Exists, OuterRef
 from tahunajaran.models import Angkatan
 from absensi.models import *
 
@@ -23,66 +23,74 @@ class IsTeacherRole(BasePermission):
 '''
 Cek Siswa Tertentu pada Suatu Angkatan
 '''
-
 @api_view(['GET'])
 def list_available_student_by_angkatan(request, angkatan):
-    """List students who are NOT assigned to any class for a given batch"""
     try:
-        # Normalisasi angkatan (misal: 23 → 2023, 2023 → tetap 2023)
-        angkatan = int(angkatan)
-        if angkatan < 100:  
-            angkatan += 2000 
-        print(angkatan)
+        angkatan_normalized = int(angkatan)
+        if angkatan_normalized < 100:
+            angkatan_normalized += 2000
+
         try:
-            print("try")
-            angkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
-        except:
+            angkatan_obj = Angkatan.objects.get(angkatan=angkatan_normalized)
+        except Angkatan.DoesNotExist:
             return JsonResponse({
                 "status": 404,
-                "errorMessage": f"Tidak terdapat angkatan tersebut ({angkatan}) pada sistem."
+                "message": f"Angkatan {angkatan_normalized} tidak ditemukan.",
+                "data": []
             }, status=404)
 
-        print(angkatanObj.angkatan)
-        print(angkatanObj.id)
-        siswa_dalam_kelas_yang_ga_aktif = Student.objects.filter(
-            isActive=True,
-            isDeleted=False,
-            angkatan=angkatanObj.id,
-            isAssignedtoClass=False
-        )
-        print(siswa_dalam_kelas_yang_ga_aktif)
-        print("heree")
+        students_in_active_classes_pks = Student.objects.filter(
+            angkatan=angkatan_obj,
+            siswa__isActive=True,  
+            siswa__isDeleted=False 
+        ).values_list('pk', flat=True).distinct()
         
-        # Ambil siswa yang belum masuk kelas atau hanya masuk kelas yang tidak aktif/dihapus
-        # Changed id__in to user_id__in to match the model's field
-#
-        if not siswa_dalam_kelas_yang_ga_aktif.exists():
+        list_pks_in_active_classes = list(students_in_active_classes_pks)
+
+        siswa_available = Student.objects.filter(
+            angkatan=angkatan_obj,
+            isActive=True,
+            isDeleted=False
+        ).exclude(
+            pk__in=list_pks_in_active_classes
+        ).select_related('user', 'angkatan').distinct()
+
+        if not siswa_available.exists():
             return JsonResponse({
-                "status": 404,
-                "errorMessage": f"Tidak ada siswa yang tersedia untuk angkatan {angkatan}."
-            }, status=404)
+                "status": 200,
+                "message": f"Tidak ada siswa yang tersedia untuk angkatan {angkatan_normalized} yang memenuhi kriteria.",
+                "data": []
+            }, status=200)
 
         return JsonResponse({
             "status": 200,
-            "message": f"Daftar siswa yang tersedia untuk angkatan {angkatan}",
+            "message": f"Daftar siswa yang tersedia untuk angkatan {angkatan_normalized} (alt query)",
             "data": [
                 {
                     "id": s.user.id,
                     "name": s.name,
                     "isAssignedtoClass": s.isAssignedtoClass,
                     "nisn": s.nisn,
-                    "username": s.username,
+                    "username": s.user.username,
                     "angkatan": s.angkatan.angkatan
-                } for s in siswa_dalam_kelas_yang_ga_aktif
+                } for s in siswa_available
             ]
         }, status=200)
 
+    except ValueError:
+        return JsonResponse({
+            "status": 400,
+            "errorMessage": "Parameter angkatan tidak valid, harus berupa angka."
+        }, status=400)
     except Exception as e:
+        # import traceback
+        # print(f"DEBUG: Terjadi kesalahan: {str(e)}")
+        # print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return JsonResponse({
             "status": 500,
-            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+            "errorMessage": f"Terjadi kesalahan internal: {str(e)}"
         }, status=500)
-
+    
 @api_view(['POST'])
 def add_siswa_to_kelas(request, kelas_id):
     try:
@@ -758,7 +766,8 @@ def get_kode_absensi_kelas(request, kelas_id):
         except Kelas.DoesNotExist:
             return JsonResponse({"status": 404, "errorMessage": "Kelas tidak ditemukan!"}, status=404)
         kode= ""
-        
+        if not kelas.isActive:
+            return JsonResponse({"status": 404, "errorMessage": "Kelas sudah tidak aktif!"}, status=404)
         if kelas.kode is None or kelas.kode_is_expired():
             kode = kelas.generate_kode()
         else:
@@ -957,5 +966,168 @@ def get_teacher_kelas(request):
             "status": 500,
             "errorMessage": f"Terjadi kesalahan: {str(e)}"
         }, status=500)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsTeacherRole])
+def get_teacher_all_kelas(request):
+    """
+    Return only the classes where the current teacher is assigned as homeroom teacher
+    and that are currently active
+    """
+    try:
+        # Get the current teacher user
+        current_user = request.user
+        
+        # Find the teacher object for the current user
+        try:
+            teacher = Teacher.objects.get(user_id=current_user.id)
+        except Teacher.DoesNotExist:
+            return JsonResponse({
+                "status": 404,
+                "errorMessage": "Data guru tidak ditemukan untuk user ini."
+            }, status=404)
+        
+        # Get all active classes where this teacher is the homeroom teacher
+        teacher_classes = Kelas.objects.filter(
+            waliKelas=teacher,
+            isDeleted=False
+        ).order_by('-updatedAt')
+        
+        if not teacher_classes.exists():
+            return JsonResponse({
+                "status": 404,
+                "message": "Anda tidak menjadi wali kelas untuk kelas aktif manapun saat ini."
+            }, status=404)
+        
+        # Format the response with classes and attendance statistics
+        response_data = []
+        for k in teacher_classes:
+            # Get the total count of students
+            total_students = k.siswa.count()
+
+            # Add class data with attendance stats to response
+            response_data.append({
+                "id": k.id,
+                "namaKelas": re.sub(r'^Kelas\s+', '', k.namaKelas, flags=re.IGNORECASE) if k.namaKelas else None,
+                "tahunAjaran": k.tahunAjaran.tahunAjaran if k.tahunAjaran else None,
+                "waliKelas": k.waliKelas.name if k.waliKelas else None,
+                "totalSiswa": total_students,
+                "angkatan": k.angkatan if k.angkatan >= 1000 else k.angkatan + 2000,
+                "isActive": k.isActive,
+                "expiredAt": k.expiredAt.strftime('%Y-%m-%d') if k.expiredAt else None,
+            })
+        
+        return JsonResponse({
+            "status": 200,
+            "message": "Daftar kelas yang Anda menjadi wali kelas",
+            "data": response_data
+        }, status=200)
     
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)
     
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsTeacherRole])
+def get_detail_kelas_baru(request, kelas_id):
+    try:
+        teacher_classes = Kelas.objects.filter(id=kelas_id)
+        response_data = []
+        for k in teacher_classes:
+            # Get the total count of students
+            total_students = k.siswa.count()
+            
+            # Initialize attendance counters
+            total_alfa = 0
+            total_hadir = 0
+            total_sakit = 0
+            total_izin = 0
+            
+            # Get the most recent absensi record for this class if it exists
+            latest_absensi = AbsensiHarian.objects.filter(kelas=k).order_by('-date').first()
+            
+            if latest_absensi:
+                # Count attendance statuses
+                for student_id, data in latest_absensi.listSiswa.items():
+                    if isinstance(data, dict):
+                        status = data.get("status", "")
+                    else:
+                        status = data
+                    
+                    if status == "Alfa":
+                        total_alfa += 1
+                    elif status == "Hadir":
+                        total_hadir += 1
+                    elif status == "Sakit":
+                        total_sakit += 1
+                    elif status == "Izin":
+                        total_izin += 1
+            
+             # Ambil semua siswa di kelas
+            siswa_kelas = k.siswa.all()
+
+            print(k.siswa.all())
+
+            # Cari semua matpel yang siswanya ada dalam kelas ini
+            matpel_qs = MataPelajaran.objects.filter(
+                siswa_terdaftar__in=siswa_kelas,
+                isDeleted=False,
+                isActive=True,
+            ).distinct()
+
+            print(matpel_qs)
+
+            # Siapkan list matpel unik
+            mata_pelajaran_unik = [
+                {
+                    "id": mp.id,
+                    "nama": mp.nama,
+                    "kode": mp.kode,
+                    "kategori": mp.kategoriMatpel,
+                }
+                for mp in matpel_qs
+            ]
+
+            
+            # Add class data with attendance stats to response
+            response_data.append({
+                "id": k.id,
+                "namaKelas": re.sub(r'^Kelas\s+', '', k.namaKelas, flags=re.IGNORECASE) if k.namaKelas else None,
+                "tahunAjaran": k.tahunAjaran.tahunAjaran if k.tahunAjaran else None,
+                "waliKelas": k.waliKelas.name if k.waliKelas else None,
+                "totalSiswa": total_students,
+                "absensiStats": {
+                    "totalAlfa": total_alfa,
+                    "totalHadir": total_hadir,
+                    "totalSakit": total_sakit,
+                    "totalIzin": total_izin
+                },
+                "mata_pelajaran_unik": mata_pelajaran_unik, 
+                "angkatan": k.angkatan if k.angkatan >= 1000 else k.angkatan + 2000,
+                "isActive": k.isActive,
+                "expiredAt": k.expiredAt.strftime('%Y-%m-%d') if k.expiredAt else None,
+                "siswa": [
+                    {
+                        "id": s.user.id,
+                        "name": s.name,
+                        "isAssignedtoClass": s.isAssignedtoClass,
+                        "nisn": s.nisn,
+                        "username": s.username
+                    } for s in k.siswa.all()
+                ]
+            })
+        
+        return JsonResponse({
+            "status": 200,
+            "message": "Daftar kelas yang Anda menjadi wali kelas",
+            "data": response_data
+        }, status=200)
+    
+    except Exception as e:
+        return JsonResponse({
+            "status": 500,
+            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+        }, status=500)
