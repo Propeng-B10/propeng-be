@@ -70,9 +70,12 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Next.js frontend
-]
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:3000",  # Next.js frontend
+#     "https://simakanglo.my.id"
+# ]
+
+CORS_ALLOW_ALL_ORIGINS = True
 
 # Application definition
 
