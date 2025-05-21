@@ -126,7 +126,6 @@ def drf_error_response(message, http_status=status.HTTP_400_BAD_REQUEST):
 
 # --- View grade_data_view (SETELAH PERUBAHAN BESAR) ---
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
 def grade_data_view(request: Request, matapelajaran_id: int):
     """
     Handles GET/POST for grade data.
@@ -134,26 +133,37 @@ def grade_data_view(request: Request, matapelajaran_id: int):
     POST: Saves/Updates grade for a specific student and component (type is inherent in component).
     """
     # --- Dapatkan profil Guru & MataPelajaran, Cek Permission (SAMA) ---
-    try: requesting_teacher = request.user.teacher
-    except (Teacher.DoesNotExist, AttributeError): return drf_error_response("Akses ditolak.", status.HTTP_403_FORBIDDEN)
+    requesting_teacher = None
+    if request.user.is_authenticated:
+        try: 
+            requesting_teacher = request.user.teacher
+        except (Teacher.DoesNotExist, AttributeError): 
+            pass  # Allow access even if not a teacher
+
     try:
         # Prefetch komponen penilaian
         matapelajaran = MataPelajaran.objects.select_related('teacher__user', 'tahunAjaran').prefetch_related(
             'siswa_terdaftar__user', # Include user relation for student
             'komponenpenilaian_matpel' # Prefetch components
         ).get(id=matapelajaran_id, isDeleted=False, isActive=True)
-    except MataPelajaran.DoesNotExist: return drf_error_response(f"MatPel tidak ditemukan.", status.HTTP_404_NOT_FOUND)
-    if matapelajaran.teacher and matapelajaran.teacher != requesting_teacher:
-        siswa_ids = matapelajaran.siswa_terdaftar.values_list("id", flat=True)
-        wali_kelas_kelas = Kelas.objects.filter(
-            siswa__in=siswa_ids,
-            waliKelas=requesting_teacher,
-            isActive=True,
-            isDeleted=False
-        ).distinct()
+    except MataPelajaran.DoesNotExist: 
+        return drf_error_response(f"MatPel tidak ditemukan.", status.HTTP_404_NOT_FOUND)
 
-        if not wali_kelas_kelas.exists():
-            return drf_error_response("Tidak ada izin.", status.HTTP_403_FORBIDDEN)
+    # Only check teacher permissions for POST requests
+    if request.method == 'POST':
+        if not requesting_teacher:
+            return drf_error_response("Akses ditolak. Hanya guru yang dapat mengubah nilai.", status.HTTP_403_FORBIDDEN)
+        if matapelajaran.teacher and matapelajaran.teacher != requesting_teacher:
+            siswa_ids = matapelajaran.siswa_terdaftar.values_list("id", flat=True)
+            wali_kelas_kelas = Kelas.objects.filter(
+                siswa__in=siswa_ids,
+                waliKelas=requesting_teacher,
+                isActive=True,
+                isDeleted=False
+            ).distinct()
+
+            if not wali_kelas_kelas.exists():
+                return drf_error_response("Tidak ada izin.", status.HTTP_403_FORBIDDEN)
     
     # ==========================
     # --- Handle GET Request ---
