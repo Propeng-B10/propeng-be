@@ -8,7 +8,7 @@ from matapelajaran.models import MataPelajaran
 from tahunajaran.models import TahunAjaran
 import re
 from rest_framework.permissions import IsAuthenticated, BasePermission
-from django.db.models import Q  
+from django.db.models import Q, Exists, OuterRef
 from tahunajaran.models import Angkatan
 from absensi.models import *
 
@@ -23,66 +23,74 @@ class IsTeacherRole(BasePermission):
 '''
 Cek Siswa Tertentu pada Suatu Angkatan
 '''
-
 @api_view(['GET'])
 def list_available_student_by_angkatan(request, angkatan):
-    """List students who are NOT assigned to any class for a given batch"""
     try:
-        # Normalisasi angkatan (misal: 23 → 2023, 2023 → tetap 2023)
-        angkatan = int(angkatan)
-        if angkatan < 100:  
-            angkatan += 2000 
-        print(angkatan)
+        angkatan_normalized = int(angkatan)
+        if angkatan_normalized < 100:
+            angkatan_normalized += 2000
+
         try:
-            print("try")
-            angkatanObj, created = Angkatan.objects.get_or_create(angkatan=angkatan)
-        except:
+            angkatan_obj = Angkatan.objects.get(angkatan=angkatan_normalized)
+        except Angkatan.DoesNotExist:
             return JsonResponse({
                 "status": 404,
-                "errorMessage": f"Tidak terdapat angkatan tersebut ({angkatan}) pada sistem."
+                "message": f"Angkatan {angkatan_normalized} tidak ditemukan.",
+                "data": []
             }, status=404)
 
-        print(angkatanObj.angkatan)
-        print(angkatanObj.id)
-        siswa_dalam_kelas_yang_ga_aktif = Student.objects.filter(
-            isActive=True,
-            isDeleted=False,
-            angkatan=angkatanObj.id,
-            isAssignedtoClass=False
-        )
-        print(siswa_dalam_kelas_yang_ga_aktif)
-        print("heree")
+        students_in_active_classes_pks = Student.objects.filter(
+            angkatan=angkatan_obj,
+            siswa__isActive=True,  
+            siswa__isDeleted=False 
+        ).values_list('pk', flat=True).distinct()
         
-        # Ambil siswa yang belum masuk kelas atau hanya masuk kelas yang tidak aktif/dihapus
-        # Changed id__in to user_id__in to match the model's field
-#
-        if not siswa_dalam_kelas_yang_ga_aktif.exists():
+        list_pks_in_active_classes = list(students_in_active_classes_pks)
+
+        siswa_available = Student.objects.filter(
+            angkatan=angkatan_obj,
+            isActive=True,
+            isDeleted=False
+        ).exclude(
+            pk__in=list_pks_in_active_classes
+        ).select_related('user', 'angkatan').distinct()
+
+        if not siswa_available.exists():
             return JsonResponse({
-                "status": 404,
-                "errorMessage": f"Tidak ada siswa yang tersedia untuk angkatan {angkatan}."
-            }, status=404)
+                "status": 200,
+                "message": f"Tidak ada siswa yang tersedia untuk angkatan {angkatan_normalized} yang memenuhi kriteria.",
+                "data": []
+            }, status=200)
 
         return JsonResponse({
             "status": 200,
-            "message": f"Daftar siswa yang tersedia untuk angkatan {angkatan}",
+            "message": f"Daftar siswa yang tersedia untuk angkatan {angkatan_normalized} (alt query)",
             "data": [
                 {
                     "id": s.user.id,
                     "name": s.name,
                     "isAssignedtoClass": s.isAssignedtoClass,
                     "nisn": s.nisn,
-                    "username": s.username,
+                    "username": s.user.username,
                     "angkatan": s.angkatan.angkatan
-                } for s in siswa_dalam_kelas_yang_ga_aktif
+                } for s in siswa_available
             ]
         }, status=200)
 
+    except ValueError:
+        return JsonResponse({
+            "status": 400,
+            "errorMessage": "Parameter angkatan tidak valid, harus berupa angka."
+        }, status=400)
     except Exception as e:
+        # import traceback
+        # print(f"DEBUG: Terjadi kesalahan: {str(e)}")
+        # print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return JsonResponse({
             "status": 500,
-            "errorMessage": f"Terjadi kesalahan: {str(e)}"
+            "errorMessage": f"Terjadi kesalahan internal: {str(e)}"
         }, status=500)
-
+    
 @api_view(['POST'])
 def add_siswa_to_kelas(request, kelas_id):
     try:

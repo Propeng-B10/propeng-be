@@ -26,4 +26,8 @@ urlpatterns = [
     # URL menjadi: api/evalguru/detail-tahunan/
     # Direkomendasikan menggunakan query params untuk GET: ?guru_id=X&tahun_ajaran_id=Y
     path('detail-tahunan/', views.get_teacher_evaluation_detail_page, name='get_teacher_evaluation_detail_page'),
+
+
+    path('create/', views.create_evalguru, name='create_evalguru'),
+    path('cek/<int:pk>/', views.get_cek_kelas, name='get_cek_kelas'),
 ]
