@@ -1,3 +1,4 @@
+from statistics import mean
 from capaiankompetensi.models import CapaianKompetensi
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -22,7 +23,20 @@ from user.models import Teacher, Student, User
 from nilai.models import Nilai
 from kelas.models import Kelas
 from komponenpenilaian.models import KomponenPenilaian, PENGETAHUAN, KETERAMPILAN
-from collections import defaultdict # Untuk memudahkan pengelompokan
+from collections import Counter, defaultdict
+from django.db.models import Avg, Count, Case, When, IntegerField
+
+KKM = 75
+
+def get_grade(nilai):
+    if nilai >= 93:
+        return 'a'
+    elif nilai >= 84:
+        return 'b'
+    elif nilai >= 75:
+        return 'c'
+    else:
+        return 'd'
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -126,7 +140,6 @@ def drf_error_response(message, http_status=status.HTTP_400_BAD_REQUEST):
 
 # --- View grade_data_view (SETELAH PERUBAHAN BESAR) ---
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
 def grade_data_view(request: Request, matapelajaran_id: int):
     """
     Handles GET/POST for grade data.
@@ -134,26 +147,62 @@ def grade_data_view(request: Request, matapelajaran_id: int):
     POST: Saves/Updates grade for a specific student and component (type is inherent in component).
     """
     # --- Dapatkan profil Guru & MataPelajaran, Cek Permission (SAMA) ---
-    try: requesting_teacher = request.user.teacher
-    except (Teacher.DoesNotExist, AttributeError): return drf_error_response("Akses ditolak.", status.HTTP_403_FORBIDDEN)
+    requesting_teacher = None
+    if request.user.is_authenticated:
+        try: 
+            requesting_teacher = request.user.teacher
+        except (Teacher.DoesNotExist, AttributeError): 
+            pass  # Allow access even if not a teacher
+
     try:
         # Prefetch komponen penilaian
         matapelajaran = MataPelajaran.objects.select_related('teacher__user', 'tahunAjaran').prefetch_related(
             'siswa_terdaftar__user', # Include user relation for student
             'komponenpenilaian_matpel' # Prefetch components
         ).get(id=matapelajaran_id, isDeleted=False, isActive=True)
-    except MataPelajaran.DoesNotExist: return drf_error_response(f"MatPel tidak ditemukan.", status.HTTP_404_NOT_FOUND)
-    if matapelajaran.teacher and matapelajaran.teacher != requesting_teacher:
-        siswa_ids = matapelajaran.siswa_terdaftar.values_list("id", flat=True)
-        wali_kelas_kelas = Kelas.objects.filter(
-            siswa__in=siswa_ids,
-            waliKelas=requesting_teacher,
-            isActive=True,
-            isDeleted=False
-        ).distinct()
+    except MataPelajaran.DoesNotExist: 
+        return drf_error_response(f"MatPel tidak ditemukan.", status.HTTP_404_NOT_FOUND)
 
-        if not wali_kelas_kelas.exists():
-            return drf_error_response("Tidak ada izin.", status.HTTP_403_FORBIDDEN)
+    # --- PERMISSION CHECKING ---
+    is_subject_teacher = matapelajaran.teacher and requesting_teacher and matapelajaran.teacher == requesting_teacher
+    is_wali_kelas_for_student_in_subject = False
+
+    if requesting_teacher and not is_subject_teacher: # Only check wali kelas if user is a teacher AND not the subject teacher
+        # Get Student instances (queryset) to check against Kelas.siswa M2M field
+        students_in_subject_queryset = matapelajaran.siswa_terdaftar.filter(isActive=True, isDeleted=False)
+        if students_in_subject_queryset.exists():
+            is_wali_kelas_for_student_in_subject = Kelas.objects.filter(
+                siswa__in=students_in_subject_queryset, # Use the queryset of Student objects
+                waliKelas=requesting_teacher,
+                isActive=True,
+                isDeleted=False
+            ).exists()
+
+    if request.method == 'GET':
+        if requesting_teacher: # If the user is a teacher (requesting_teacher is not None)
+            if not is_subject_teacher and not is_wali_kelas_for_student_in_subject:
+                return drf_error_response(
+                    "Akses ditolak. Anda bukan guru mata pelajaran ini atau wali kelas dari siswa yang terdaftar di mata pelajaran ini.",
+                    status.HTTP_403_FORBIDDEN
+                )
+        # If not requesting_teacher (e.g., admin), or is_subject_teacher, or is_wali_kelas_for_student_in_subject,
+        # GET access is allowed to proceed.
+        
+    # Only check teacher permissions for POST requests
+    if request.method == 'POST':
+        if not requesting_teacher:
+            return drf_error_response("Akses ditolak. Hanya guru yang dapat mengubah nilai.", status.HTTP_403_FORBIDDEN)
+        if matapelajaran.teacher and matapelajaran.teacher != requesting_teacher:
+            siswa_ids = matapelajaran.siswa_terdaftar.values_list("id", flat=True)
+            wali_kelas_kelas = Kelas.objects.filter(
+                siswa__in=siswa_ids,
+                waliKelas=requesting_teacher,
+                isActive=True,
+                isDeleted=False
+            ).distinct()
+
+            if not wali_kelas_kelas.exists():
+                return drf_error_response("Tidak ada izin.", status.HTTP_403_FORBIDDEN)
     
     # ==========================
     # --- Handle GET Request ---
@@ -259,7 +308,7 @@ def grade_data_view(request: Request, matapelajaran_id: int):
 
             # Validasi input lain (tanpa scoreType)
             if not all(k in data for k in ['studentId', 'componentId', 'score']) or not student_user_id or not component_id:
-                 return drf_error_response("Data tidak lengkap (membutuhkan studentId, componentId, score).", status.HTTP_400_BAD_REQUEST)
+                return drf_error_response("Data tidak lengkap (membutuhkan studentId, componentId, score).", status.HTTP_400_BAD_REQUEST)
 
             # Konversi & Validasi Score (SAMA)
             final_score = None
@@ -612,3 +661,312 @@ def get_student_all_grades(request: Request):
         print(f"Error fetching student grades: {e}")
         traceback.print_exc()
         return drf_error_response("Terjadi kesalahan internal saat mengambil data nilai.", status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+def get_student_insights(student_ids, tahunAjaran):
+    nilai_queryset = Nilai.objects.select_related(
+        'student',
+        'komponen__mataPelajaran'
+    ).filter(
+        student__id__in=student_ids,
+        komponen__mataPelajaran__tahunAjaran=tahunAjaran
+    ).exclude(nilai__isnull=True)
+
+    # Group by student → mataPelajaran → nilai
+    student_matpel_grades = defaultdict(lambda: defaultdict(list))
+    for nilai in nilai_queryset:
+        matpel_id = nilai.komponen.mataPelajaran.id
+        student_id = nilai.student.id
+        student_matpel_grades[student_id][matpel_id].append(nilai.nilai)
+
+    # Store per-student summaries
+    per_student_summary = {}
+
+    class_averages = []
+
+    for student_id, matpel_map in student_matpel_grades.items():
+        matpel_grades = {}
+        grade_counts = {'a': 0, 'b': 0, 'c': 0, 'd': 0}
+        total_grades = []
+
+        for matpel_id, nilai_list in matpel_map.items():
+            avg = sum(nilai_list) / len(nilai_list)
+            total_grades.append(avg)
+
+            grade = get_grade(avg)
+            grade_counts[grade] += 1
+
+        matpel_total = len(matpel_map)
+        avg_all = sum(total_grades) / len(total_grades) if total_grades else 0
+        class_averages.append(avg_all)
+
+        passed_matpel = grade_counts['a'] + grade_counts['b'] + grade_counts['c']
+        per_student_summary[student_id] = {
+            'grade_counts': grade_counts,
+            'total_matpel': matpel_total,
+            'passed_matpel': passed_matpel,
+            'avg': avg_all
+        }
+
+    # Compute class average
+    class_avg = sum(class_averages) / len(class_averages) if class_averages else 0
+    class_threshold = class_avg + ((100 - class_avg) / 2)
+
+    # Initialize all counters
+    insights = {
+        'more_than_8_A': 0,
+        'between_1_8_A': 0,
+        'zero_A': 0,
+        'more_than_5_C': 0,
+        'between_1_5_C': 0,
+        'zero_C': 0,
+        'more_than_3_D': 0,
+        'between_1_3_D': 0,
+        'zero_D': 0,
+        'passed_less_than_half': 0,
+        'passed_half_to_all': 0,
+        'passed_all': 0,
+        'below_class_avg': 0,
+        'between_avg_and_threshold': 0,
+        'above_threshold': 0,
+        'avg_below_75': 0,
+        'avg_between_75_84': 0,
+        'avg_84_or_more': 0
+    }
+
+    for student_data in per_student_summary.values():
+        a = student_data['grade_counts']['a']
+        c = student_data['grade_counts']['c']
+        d = student_data['grade_counts']['d']
+        total = student_data['total_matpel']
+        passed = student_data['passed_matpel']
+        avg = student_data['avg']
+
+        # A-grade insights
+        if a > 8:
+            insights['more_than_8_A'] += 1
+        elif 1 <= a <= 8:
+            insights['between_1_8_A'] += 1
+        else:
+            insights['zero_A'] += 1
+
+        # C-grade insights
+        if c > 5:
+            insights['more_than_5_C'] += 1
+        elif 1 <= c <= 5:
+            insights['between_1_5_C'] += 1
+        else:
+            insights['zero_C'] += 1
+
+        # D-grade insights
+        if d > 3:
+            insights['more_than_3_D'] += 1
+        elif 1 <= d <= 3:
+            insights['between_1_3_D'] += 1
+        else:
+            insights['zero_D'] += 1
+
+        # Passed subject insights
+        if passed < (total / 2):
+            insights['passed_less_than_half'] += 1
+        elif passed >= (total / 2) and passed < total:
+            insights['passed_half_to_all'] += 1
+        elif passed == total:
+            insights['passed_all'] += 1
+
+        # Class average comparison
+        if avg < class_avg:
+            insights['below_class_avg'] += 1
+        elif class_avg <= avg < class_threshold:
+            insights['between_avg_and_threshold'] += 1
+        else:
+            insights['above_threshold'] += 1
+
+        # Final avg benchmarks
+        if avg < 75:
+            insights['avg_below_75'] += 1
+        elif 75 <= avg < 84:
+            insights['avg_between_75_84'] += 1
+        else:
+            insights['avg_84_or_more'] += 1
+
+    # Optional: include the class average in return
+    insights['class_avg'] = round(class_avg, 2)
+    insights['class_threshold'] = round(class_threshold, 2)
+
+    return insights
+
+def calculate_class_distribution(kelas_id):
+    kelas = Kelas.objects.get(id=kelas_id)
+    siswa_ids = kelas.siswa.values_list('user_id', flat=True)
+
+    nilai_qs = Nilai.objects.filter(student_id__in=siswa_ids).select_related(
+        'komponen__mataPelajaran'
+    )
+
+    nilai_per_siswa = defaultdict(list)
+
+    for nilai in nilai_qs:
+        nilai_per_siswa[nilai.student.id].append(nilai.nilai)
+
+    grade_counts = Counter()
+
+    for nilai_list in nilai_per_siswa.values():
+        if not nilai_list:
+            continue
+        avg_score = sum(nilai_list) / len(nilai_list)
+        grade = get_grade(avg_score)
+        grade_counts[grade.lower()] += 1
+
+    return {
+        'distribusi': dict(grade_counts),
+    }
+
+def calculate_subject_avg_and_distribution_all(kelas_id):
+    result = []
+
+    kelas = Kelas.objects.get(id=kelas_id)
+    siswa_ids = kelas.siswa.values_list('user_id', flat=True)
+
+    nilai_qs = Nilai.objects.filter(student_id__in=siswa_ids).select_related(
+        'komponen__mataPelajaran'
+    )
+
+    # Nested: {mataPelajaran: {student_id: [nilai1, nilai2, ...]}}
+    nilai_per_matpel = defaultdict(lambda: defaultdict(list))
+
+    for nilai in nilai_qs:
+        mp = nilai.komponen.mataPelajaran
+        student_id = nilai.student.id
+        nilai_per_matpel[mp][student_id].append(nilai.nilai)
+
+    for mp, siswa_nilai_dict in nilai_per_matpel.items():
+        total_scores = []
+        grade_counts = Counter()
+        siswa_counts = 0
+
+        for student_id, nilai_list in siswa_nilai_dict.items():
+            if not nilai_list:
+                continue
+            avg_score = sum(nilai_list) / len(nilai_list)
+            grade = get_grade(avg_score)
+            grade_counts[grade.lower()] += 1
+            total_scores.append(avg_score)
+            siswa_counts += 1
+
+        overall_avg = sum(total_scores) / len(total_scores) if total_scores else 0
+
+        result.append({
+            'id_mata_pelajaran': mp.id,
+            'mata_pelajaran': mp.nama,
+            'jumlah_siswa': siswa_counts,
+            'rata_rata': round(overall_avg, 2),
+            'distribusi': dict(grade_counts)
+        })
+
+    return result
+
+def calculate_subject_avg_and_distribution_by_jenis(kelas_id):
+    result = []
+
+    kelas = Kelas.objects.get(id=kelas_id)
+    siswa_ids = kelas.siswa.values_list('user_id', flat=True)
+
+    nilai_qs = Nilai.objects.filter(student_id__in=siswa_ids).select_related(
+        'komponen__mataPelajaran'
+    )
+
+    # Nested: { (mataPelajaran, jenis): {student_id: [nilai1, nilai2, ...]} }
+    nilai_per_matpel_jenis = defaultdict(lambda: defaultdict(list))
+
+    for nilai in nilai_qs:
+        mp = nilai.komponen.mataPelajaran
+        jenis = nilai.komponen.tipeKomponen
+        key = (mp.id, mp.nama, jenis)
+        nilai_per_matpel_jenis[key][nilai.student.id].append(nilai.nilai)
+
+    for (mp_id, mp_nama, jenis), siswa_nilai_dict in nilai_per_matpel_jenis.items():
+        total_scores = []
+        grade_counts = Counter()
+
+        for nilai_list in siswa_nilai_dict.values():
+            if not nilai_list:
+                continue
+            avg_score = sum(nilai_list) / len(nilai_list)
+            grade = get_grade(avg_score)
+            grade_counts[grade.lower()] += 1
+            total_scores.append(avg_score)
+
+        overall_avg = sum(total_scores) / len(total_scores) if total_scores else 0
+
+        result.append({
+            'id_mata_pelajaran': mp_id,
+            'mata_pelajaran': mp_nama,
+            'jenis': jenis,
+            'rata_rata': round(overall_avg, 2),
+            'distribusi': dict(grade_counts)
+        })
+
+    return result
+
+def get_top_and_risk_students(kelas_id):
+    kelas = Kelas.objects.get(id=kelas_id)
+    siswa_list = kelas.siswa.select_related('user').all()
+    siswa_ids = [siswa.user_id for siswa in siswa_list]
+
+    nilai_qs = (
+        Nilai.objects
+        .filter(student__id__in=siswa_ids)
+        .select_related('student', 'komponen')
+    )
+
+    nilai_per_siswa = defaultdict(lambda: {
+        'nama': '',
+        'total': 0,
+        'count': 0,
+        'pengetahuan_total': 0,
+        'pengetahuan_count': 0,
+        'keterampilan_total': 0,
+        'keterampilan_count': 0,
+    })
+
+    for nilai in nilai_qs:
+        sid = nilai.student.id
+        student = Student.objects.get(user_id=sid)
+        nama = student.name
+
+        data = nilai_per_siswa[sid]
+        data['nama'] = nama
+        data['total'] += nilai.nilai
+        data['count'] += 1
+
+        if nilai.komponen.tipeKomponen.lower() == 'pengetahuan':
+            data['pengetahuan_total'] += nilai.nilai
+            data['pengetahuan_count'] += 1
+        elif nilai.komponen.tipeKomponen.lower() == 'keterampilan':
+            data['keterampilan_total'] += nilai.nilai
+            data['keterampilan_count'] += 1
+
+    siswa_stats = []
+    for sid, data in nilai_per_siswa.items():
+        if data['count'] == 0:
+            continue
+
+        rerata = data['total'] / data['count']
+        nilai_pengetahuan = data['pengetahuan_total'] / data['pengetahuan_count'] if data['pengetahuan_count'] else 0
+        nilai_keterampilan = data['keterampilan_total'] / data['keterampilan_count'] if data['keterampilan_count'] else 0
+
+        siswa_stats.append({
+            'id': sid,
+            'namaSiswa': data['nama'],
+            'rerataNilai': round(rerata, 2),
+            'nilaiPengetahuan': round(nilai_pengetahuan, 2),
+            'nilaiKeterampilan': round(nilai_keterampilan, 2),
+        })
+
+    siswa_terbaik = sorted(siswa_stats, key=lambda x: x['rerataNilai'], reverse=True)[:10]
+    siswa_risiko = [s for s in siswa_stats if s['rerataNilai'] < 75]
+
+    return {
+        'siswa_terbaik': siswa_terbaik,
+        'siswa_risiko_akademik': siswa_risiko
+    }

@@ -20,4 +20,5 @@ urlpatterns = [
     path('kelas-saya/', get_teacher_kelas, name='get_teacher_kelas'),
     path('semua-kelas-saya/', get_teacher_all_kelas, name="get_kelas_semua"),
     path('baru/<int:kelas_id>/', get_detail_kelas_baru, name='detail_kelas_baru'),
+    path('<int:kelas_id>/insight/', kelas_insight_view, name='kelas-insight'),
 ]
