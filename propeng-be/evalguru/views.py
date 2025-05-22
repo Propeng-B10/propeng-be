@@ -772,11 +772,16 @@ def get_evaluasi_guru(request, pk):
                 if isinstance(indicators, dict):
                     for ind_id_str, score in indicators.items():
                         if isinstance(score, (int, float)) and 1 <= score <= 5:
-                            scores_by_variable_indicator[var_id_str][ind_id_str].append(score)
-
-    # Calculate averages per variable
+                            scores_by_variable_indicator[var_id_str][ind_id_str].append(score)    # Calculate averages per variable - ensure all 4 variables are always included
     variable_averages = {}
     if hasattr(EvalGuru, 'pilihanvariabel'):
+        # First, initialize all variables with default value "- / 5.00"
+        for var_choice in EvalGuru.pilihanvariabel:
+            var_id_int = var_choice[0]
+            var_id_str = str(var_id_int)
+            variable_averages[var_id_str] = "- / 5.00"
+        
+        # Then calculate averages for variables that have data
         for var_choice in EvalGuru.pilihanvariabel:
             var_id_int = var_choice[0]
             var_id_str = str(var_id_int)
@@ -786,20 +791,28 @@ def get_evaluasi_guru(request, pk):
                 all_scores_for_var.extend(scores)
             
             if all_scores_for_var:
-                variable_averages[var_id_str] = f"{sum(all_scores_for_var) / len(all_scores_for_var):.2f} / 5.00"
-            else:
-                variable_averages[var_id_str] = "- / 5.00"
-
-    # Calculate averages per indicator
+                variable_averages[var_id_str] = f"{sum(all_scores_for_var) / len(all_scores_for_var):.2f} / 5.00"    # Calculate averages per indicator
     indicator_detail = []
-    if hasattr(EvalGuru, 'pilihanvariabel'):
+    if hasattr(EvalGuru, 'pilihanvariabel') and hasattr(EvalGuru, 'pilihanindikator'):
         for var_choice in EvalGuru.pilihanvariabel:
             var_id_int = var_choice[0]
             var_id_str = str(var_id_int)
             
             data_per_var = {"variabel_id": var_id_int}
             
-            # Sort indicator IDs numerically
+            # Get all possible indicators from EvalGuru.pilihanindikator
+            available_indicators = []
+            for ind_choice in EvalGuru.pilihanindikator:
+                ind_id_int = ind_choice[0]
+                ind_id_str = str(ind_id_int)
+                available_indicators.append(ind_id_str)
+            
+            # First initialize all indicators for this variable with default value
+            for ind_id_str in available_indicators:
+                data_per_var[f"Indikator {ind_id_str}"] = "- / 5.00"
+            
+            # Then calculate averages for indicators that have data
+            # Get the actual indicators used for this variable from the collected data
             indicator_ids = sorted(
                 scores_by_variable_indicator.get(var_id_str, {}).keys(),
                 key=lambda k: int(k) if k.isdigit() else k
@@ -810,12 +823,8 @@ def get_evaluasi_guru(request, pk):
                 if scores:
                     avg = sum(scores) / len(scores)
                     data_per_var[f"Indikator {ind_id_str}"] = f"{avg:.2f} / 5.00"
-                else:
-                    data_per_var[f"Indikator {ind_id_str}"] = "- / 5.00"
             
-            indicator_detail.append(data_per_var)
-
-    # Calculate grand total average
+            indicator_detail.append(data_per_var)    # Calculate grand total average - only from variables that have data
     valid_var_avgs = []
     for var_id_str in variable_averages.keys():
         all_var_scores = []
@@ -825,7 +834,7 @@ def get_evaluasi_guru(request, pk):
             valid_var_avgs.append(sum(all_var_scores) / len(all_var_scores))
 
     grand_total = f"{sum(valid_var_avgs) / len(valid_var_avgs):.2f} / 5.00" if valid_var_avgs else "- / 5.00"
-
+    
     response_data = {
         "nama_matapelajaran": matapelajaran_obj.nama if hasattr(matapelajaran_obj, 'nama') else "N/A",
         "tahun_ajaran_mapel": str(matapelajaran_obj.tahunAjaran.tahunAjaran) if (hasattr(matapelajaran_obj, 'tahunAjaran') and matapelajaran_obj.tahunAjaran) else "N/A",
@@ -860,6 +869,7 @@ def get_evaluasi_guru_per_matpel(request):
     
     response_data = []
     all_mataPelajaran_obj = MataPelajaran.objects.filter(teacher=guru_obj)
+    
     
     for matpel in all_mataPelajaran_obj:
         evaluation_per_class = isianEvalGuru.objects.filter(
