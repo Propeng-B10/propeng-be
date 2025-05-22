@@ -1087,15 +1087,21 @@ def get_yearly_attendance_summary(request, kelas_id):
                         "attendance_percentage": pct
                     })
                 
-                # build weekly averages exactly as before
-                slots = total_students * week_recs.count()
-                raw   = {s: (monthly_total[s] / slots * 100) if slots else 0.0 for s in possible_statuses}
-                sum_raw = sum(raw.values())
+                # first, count each status once per-day 
+                weekly_tot = defaultdict(int)
+                for rec in week_recs:
+                    for sid, data in rec.listSiswa.items():
+                        st = data.get("status", data) if isinstance(data, dict) else data
+                        if st in possible_statuses:
+                            weekly_tot[st] += 1
+
+                # denominator is total_students × number of days in this week (wk_days)
+                slots = total_students * len(wk_days)
                 weekly_avg = {
-                    s: round((raw[s] / sum_raw) * 100, 1) if sum_raw else 0.0
+                    s: round(weekly_tot[s] / slots * 100, 1) if slots else 0.0
                     for s in possible_statuses
                 }
-                
+
                 # displayWeek formatting unchanged
                 if wstart.month == wend.month:
                     display = f"{wstart.day} – {wend.day} {ind_months[month]}"
