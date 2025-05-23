@@ -29,7 +29,7 @@ class KomponenPenilaian(models.Model):
     )
 
     def clean(self):
-        if self.mataPelajaran and not self.mataPelajaran.is_active:
+        if self.mataPelajaran and not self.mataPelajaran.isActive:
             raise ValidationError("Tidak dapat menyimpan komponen karena Mata Pelajaran sudah tidak aktif.")
 
     def save(self, *args, **kwargs):
