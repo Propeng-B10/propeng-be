@@ -1,4 +1,5 @@
 from datetime import timedelta
+from itertools import count
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from kelas.models import Kelas
@@ -6,11 +7,15 @@ from kelas.models import Student
 from kelas.models import Teacher
 from matapelajaran.models import MataPelajaran
 from tahunajaran.models import TahunAjaran
+from matapelajaran.models import MataPelajaran
+from nilai.models import Nilai
 import re
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from django.db.models import Q, Exists, OuterRef
 from tahunajaran.models import Angkatan
 from absensi.models import *
+from nilai.views import *
+from django.db.models import Avg, Count, Case, When, IntegerField
 
 
 class IsTeacherRole(BasePermission):
@@ -905,8 +910,7 @@ def get_teacher_kelas(request):
              # Ambil semua siswa di kelas
             siswa_kelas = k.siswa.all()
 
-            print(k.siswa.all())
-
+            
             # Cari semua matpel yang siswanya ada dalam kelas ini
             matpel_qs = MataPelajaran.objects.filter(
                 siswa_terdaftar__in=siswa_kelas,
@@ -971,6 +975,7 @@ def get_teacher_kelas(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsTeacherRole])
 def get_teacher_all_kelas(request):
+    print("debug get teacher all kelas")
     """
     Return only the classes where the current teacher is assigned as homeroom teacher
     and that are currently active
@@ -978,6 +983,7 @@ def get_teacher_all_kelas(request):
     try:
         # Get the current teacher user
         current_user = request.user
+        print("disini current user")
         
         # Find the teacher object for the current user
         try:
@@ -993,8 +999,17 @@ def get_teacher_all_kelas(request):
             waliKelas=teacher,
             isDeleted=False
         ).order_by('-updatedAt')
-        
-        if not teacher_classes.exists():
+        print(teacher_classes)
+        print("disini teacher classes COK")
+        print(teacher_classes)
+        print("wow")
+        for i in teacher_classes:
+            print(i.namaKelas)
+            print(i.waliKelas)
+            print(i.siswa.all())
+            print(i.siswa.count())
+        print("disini teacher classes abis for")    
+        if len(teacher_classes) == 0:
             return JsonResponse({
                 "status": 404,
                 "message": "Anda tidak menjadi wali kelas untuk kelas aktif manapun saat ini."
@@ -1132,3 +1147,85 @@ def get_detail_kelas_baru(request, kelas_id):
             "status": 500,
             "errorMessage": f"Terjadi kesalahan: {str(e)}"
         }, status=500)
+    
+def mata_pelajaran_student_count(kelas_id):
+    kelas = Kelas.objects.get(id=kelas_id)
+    siswa_user_ids = kelas.siswa.all().values_list('user_id', flat=True)
+
+    matpels = MataPelajaran.objects.filter(
+        siswa_terdaftar__user_id__in=siswa_user_ids,
+        tahunAjaran=kelas.tahunAjaran
+    ).distinct()
+
+    hasil = []
+    max_count = 0
+    min_count = float('inf')
+    max_subjects = []
+    min_subjects = []
+
+    for matpel in matpels:
+        jumlah = matpel.siswa_terdaftar.filter(user_id__in=siswa_user_ids).distinct().count()
+        hasil.append({
+            "name": matpel.nama,
+            "value": jumlah
+        })
+
+        if jumlah > max_count:
+            max_count = jumlah
+            max_subjects = [matpel.nama]
+        elif jumlah == max_count:
+            max_subjects.append(matpel.nama)
+
+        if jumlah < min_count:
+            min_count = jumlah
+            min_subjects = [matpel.nama]
+        elif jumlah == min_count:
+            min_subjects.append(matpel.nama)
+
+    notes = []
+    for subject in max_subjects:
+        notes.append(f"{subject} adalah mata pelajaran yang diambil oleh paling banyak siswa")
+    for subject in min_subjects:
+        notes.append(f"{subject} adalah mata pelajaran yang diambil oleh paling sedikit siswa")
+
+    return {
+        "classes": hasil,
+        "classes_notes": notes
+    }
+    
+@api_view(['GET'])
+def kelas_insight_view(request, kelas_id):
+    teacher = Teacher.objects.get(user=request.user)
+        
+    try:
+        kelas = Kelas.objects.get(id=kelas_id, waliKelas=teacher)
+        siswa_ids = [s.user.id for s in kelas.siswa.all()]
+    except Kelas.DoesNotExist:
+        return JsonResponse({
+            "status": 404,
+            "errorMessage": "Kelas tidak ditemukan atau Anda bukan wali kelas untuk kelas ini."
+        }, status=404)
+    
+    if not siswa_ids:
+        return JsonResponse({"message": "Tidak ada siswa di kelas ini"}, status=400)
+
+    insights = get_student_insights(siswa_ids, kelas.tahunAjaran)
+    subjectData = mata_pelajaran_student_count(kelas_id)
+    classDistribution = calculate_class_distribution(kelas_id)
+    subjectAvg = calculate_subject_avg_and_distribution_all(kelas_id)
+    subjectAvgJenis = calculate_subject_avg_and_distribution_by_jenis(kelas_id)
+    topAndRiskStudent = get_top_and_risk_students(kelas_id)
+    print(topAndRiskStudent)
+
+    return JsonResponse({
+        "status": 200,
+        "kelas": kelas.namaKelas,
+        "total_siswa": len(siswa_ids),
+        "tahun_ajaran": f"{kelas.tahunAjaran.tahunAjaran}" if kelas.tahunAjaran else None,
+        "insights": insights,
+        "subject_data": subjectData,
+        "class_distribution": classDistribution,
+        "subject_distribution_all": subjectAvg,
+        "subject_distribution_by_komponen": subjectAvgJenis,
+        "student_data": topAndRiskStudent
+    })

@@ -1,4 +1,5 @@
 import calendar
+import traceback
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 
@@ -31,7 +32,7 @@ def get_month_weeks(year, month):
     """
     Returns a list of (week_start, week_end, weekdays)
     where weekdays = [Mon, Tue, Wed, Thu, Fri],
-    and only those blocks with ≥3 days in `month` are kept—
+    and only those blocks with ≥3 days in month are kept—
     except in January we force week 1 to be Jan 6–10.
     """
     cal = Calendar(firstweekday=0)  # Monday first
@@ -771,718 +772,403 @@ def get_weekly_attendance_summary_details(request, kelas_id):
         }, status=500)
         
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsTeacherRole]) # Assuming only teachers can access this
+@permission_classes([IsAuthenticated, IsTeacherRole])
 def get_monthly_student_attendance_analysis(request, kelas_id):
     """
-    Get monthly attendance analysis (top/bottom students) for a specific class.
-    Requires 'month' (1-12) and optional 'year' query parameters.
-    Requires the logged-in user to be the waliKelas of the class.
+    Get monthly attendance analysis (top/bottom students) for a specific class,
+    using only the get_month_weeks(...) days as denominator.
     """
     try:
-        # 1. Get the current teacher user
-        current_user = request.user
-        try:
-            teacher = Teacher.objects.get(user=current_user)
-        except Teacher.DoesNotExist:
-            return JsonResponse({
-                "status": 404,
-                "errorMessage": "Profil guru tidak ditemukan untuk user ini."
-            }, status=404)
+        teacher = Teacher.objects.get(user=request.user)
+        kelas   = Kelas.objects.get(
+            id=kelas_id, waliKelas=teacher, isActive=True, isDeleted=False
+        )
+        month = int(request.query_params.get('month') or 0)
+        year  = int(request.query_params.get('year', timezone.now().year))
+        if not 1 <= month <= 12:
+            return JsonResponse({"status":400,"errorMessage":"Bulan harus 1–12"}, status=400)
 
-        # 2. Get the requested class and verify the teacher is the waliKelas
-        try:
-            kelas = Kelas.objects.get(id=kelas_id, waliKelas=teacher, isActive=True, isDeleted=False)
-        except Kelas.DoesNotExist:
-            return JsonResponse({
-                "status": 404,
-                "errorMessage": "Kelas tidak ditemukan, tidak aktif, atau Anda bukan wali kelas untuk kelas ini."
-            }, status=404)
+        # build our week-blocks
+        blocks = get_month_weeks(year, month)
+        total_possible = sum(len(wk_days) for *_ , wk_days in blocks)
 
-        # 3. Get and validate month and year from query parameters
-        month_param = request.query_params.get('month')
-        year_param = request.query_params.get('year', timezone.now().year) # Default to current year
-
-        if not month_param:
-            return JsonResponse({
-                "status": 400,
-                "errorMessage": "Parameter query 'month' (1-12) wajib disertakan."
-            }, status=400)
-
-        try:
-            month = int(month_param)
-            year = int(year_param)
-            if not 1 <= month <= 12:
-                 return JsonResponse({
-                    "status": 400,
-                    "errorMessage": "Parameter 'month' harus berupa angka antara 1 dan 12."
-                }, status=400)
-            # Ensure year is reasonable (e.g., not before 1900)
-            if year < 1900 or year > timezone.now().year + 5: # Example reasonable range
-                 return JsonResponse({
-                    "status": 400,
-                    "errorMessage": f"Parameter 'year' tidak valid. Gunakan tahun yang masuk akal (cth. 1900 - {timezone.now().year + 5})."
-                }, status=400)
-
-        except ValueError:
-            return JsonResponse({
-                "status": 400,
-                "errorMessage": "Parameter 'month' dan 'year' harus berupa angka."
-            }, status=400)
-
-        # 4. Determine the date range for the month
-        try:
-            # Get the last day of the month
-            last_day_of_month = calendar.monthrange(year, month)[1]
-            start_date = date(year, month, 1)
-            end_date = date(year, month, last_day_of_month)
-        except calendar.IllegalMonthError:
-             return JsonResponse({
-                "status": 400,
-                "errorMessage": "Bulan yang diminta tidak valid."
-            }, status=400)
-        except ValueError as e:
-             return JsonResponse({
-                "status": 400,
-                "errorMessage": f"Tanggal yang diminta tidak valid: {e}"
-            }, status=400)
-
-
-        # 5. Get all attendance records for this class within the month (Mon-Fri only count towards total days)
-        # We need all records within the month, but only weekdays contribute to possible attendance days.
-        all_records_in_month = AbsensiHarian.objects.filter(
+        # map date→record once
+        start = date(year, month, 1)
+        end   = date(year, month, monthrange(year, month)[1])
+        records = AbsensiHarian.objects.filter(
             kelas=kelas,
-            date__gte=start_date,
-            date__lte=end_date,
-        ).order_by('date')
+            date__gte=start,
+            date__lte=end
+        )
+        rec_by_date = {r.date: r for r in records}
 
-        # Calculate the total number of possible attendance days (number of Mon-Fri records)
-        # This is the denominator for the attendance percentage.
-        total_possible_days_in_month = all_records_in_month.filter(date__week_day__range=(2, 6)).count()
+        students = list(kelas.siswa.all())
+        possible_statuses = ['Hadir','Sakit','Izin','Alfa']
 
-        # 6. Get all students in the class
-        students_in_class = kelas.siswa.all()
-        if not students_in_class.exists():
-             # Still return 200 but indicate no students and provide empty lists
-             response_data = {
-                "kelas_info": {
-                    "id": kelas.id,
-                    "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
-                    "waliKelas": kelas.waliKelas.name if kelas.waliKelas else None,
-                    "totalSiswa": 0
-                },
-                 "month_info": {
-                    "year": year,
-                    "monthNumber": month,
-                    "monthName": calendar.month_name[month], # English month name
-                    "startDate": start_date.strftime('%Y-%m-%d'),
-                    "endDate": end_date.strftime('%Y-%m-%d'),
-                    "totalPossibleDays": 0 # No students, so 0 possible days counted for students
-                },
-                "top_students": [],
-                "bottom_students": []
-             }
-             return JsonResponse({
-                "status": 200,
-                "message": "Kelas ini tidak memiliki siswa, tidak ada data analisis.",
-                "data": response_data
-            }, status=200)
-
-        # 7. Process attendance records to calculate counts per student for the month
-        student_monthly_data = {}
-        for student in students_in_class:
-             student_monthly_data[student.user_id] = {
-                 "id": student.user_id,
-                 "name": student.name,
-                 "counts": {"Hadir": 0, "Sakit": 0, "Izin": 0, "Alfa": 0},
-                 "percentage": 0.0,
-                 "total_possible_days": total_possible_days_in_month # Initialize possible days
-             }
-
-        # Iterate through all records in the month to accumulate counts for each student
-        # We only need to process records for weekdays that count towards the percentage denominator.
-        weekday_records_in_month = all_records_in_month.filter(date__week_day__range=(2, 6)) # Filter here again
-
-        for record in weekday_records_in_month:
-            # Iterate through the student attendance data for THIS specific day
-            for student_id_key, data in record.listSiswa.items():
-                try:
-                    student_user_id = int(student_id_key)
-                except ValueError:
-                    continue # Skip if the key isn't a valid student ID
-
-                # Check if this student is in the class we are analyzing (should be, based on how listSiswa is populated)
-                # and if they were initialized in student_monthly_data
-                if student_user_id in student_monthly_data:
-                    # Extract status, handling both dict and string formats
-                    status = data.get("status", data) if isinstance(data, dict) else data
-
-                    # Increment the count for this status for this student
-                    if status in student_monthly_data[student_user_id]["counts"]:
-                        student_monthly_data[student_user_id]["counts"][status] += 1
-                    # else: # Optional: Handle unexpected status if needed
-
-
-        # 8. Calculate percentage for each student and prepare final student list
-        student_analysis_list = []
-        for student_id, data in student_monthly_data.items():
-            hadir_count = data["counts"].get("Hadir", 0)
-            percentage = 0.0
-            if total_possible_days_in_month > 0:
-                percentage = (hadir_count / total_possible_days_in_month) * 100
-
-            # Format day counts
-            formatted_counts = {
-                status: f'{count} hari' for status, count in data["counts"].items()
+        # initialize per-student counters
+        data = {
+            s.user_id: {
+                "id": s.user_id,
+                "name": s.name,
+                "counts": dict.fromkeys(possible_statuses, 0)
             }
-
-
-            student_analysis_list.append({
-                "id": data["id"],
-                "name": data["name"],
-                "percentage": round(percentage, 1), # Round percentage
-                "counts": formatted_counts
-            })
-
-        # 9. Sort students and get top/bottom 3
-        # Sort by percentage ascending to easily get bottom (start) and top (end)
-        student_analysis_list.sort(key=lambda x: x['percentage'])
-
-        # Get bottom 3
-        bottom_students = student_analysis_list[:min(3, len(student_analysis_list))] # Take up to 3
-
-        # Sort by percentage descending for top 3
-        student_analysis_list.sort(key=lambda x: x['percentage'], reverse=True)
-
-        # Get top 3
-        top_students = student_analysis_list[:min(3, len(student_analysis_list))] # Take up to 3
-
-        # 10. Assemble the final response data
-        response_data = {
-            "kelas_info": {
-                "id": kelas.id,
-                "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
-                "waliKelas": kelas.waliKelas.name if kelas.waliKelas else None,
-                "totalSiswa": students_in_class.count()
-            },
-            "month_info": {
-                "year": year,
-                "monthNumber": month,
-                 # Use Indonesian month names for display
-                 "monthName": {
-                     1: "Januari", 2: "Februari", 3: "Maret", 4: "April",
-                     5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus",
-                     9: "September", 10: "Oktober", 11: "November", 12: "Desember"
-                 }.get(month, ""),
-                 "startDate": start_date.strftime('%Y-%m-%d'),
-                 "endDate": end_date.strftime('%Y-%m-%d'),
-                 "totalPossibleDaysInMonth": total_possible_days_in_month # Total weekdays with records
-            },
-            "top_students": top_students,
-            "bottom_students": bottom_students
+            for s in students
         }
 
-        return JsonResponse({
-            "status": 200,
-            "message": "Analisis kehadiran bulanan berhasil diambil",
-            "data": response_data
-        }, status=200)
+        # count each status only on our block-days
+        for _wstart, _wend, wk_days in blocks:
+            for d in wk_days:
+                rec = rec_by_date.get(d)
+                if not rec:
+                    continue
+                for sid, st in rec.listSiswa.items():
+                    sid_i = int(sid)
+                    stv   = st.get("status", st) if isinstance(st, dict) else st
+                    if sid_i in data and stv in possible_statuses:
+                        data[sid_i]["counts"][stv] += 1
 
-    except Teacher.DoesNotExist:
-        return JsonResponse({
-            "status": 404,
-            "errorMessage": "Profil guru tidak ditemukan."
-        }, status=404)
-    except Exception as e:
-        # Log the error for debugging
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({
-            "status": 500,
-            "errorMessage": f"Terjadi kesalahan internal saat mengambil analisis kehadiran bulanan: {str(e)}"
-        }, status=500)
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated, IsTeacherRole]) # Assuming only teachers can access this
-def get_monthly_student_attendance_detail(request, kelas_id):
-    """
-    Get detailed monthly student attendance breakdown for a specific class,
-    including overall monthly percentage and weekly summaries.
-    Requires 'month' (1-12) and optional 'year' query parameters.
-    Requires the logged-in user to be the waliKelas of the class.
-    """
-    try:
-        # 1. Get the current teacher user
-        current_user = request.user
-        try:
-            teacher = Teacher.objects.get(user=current_user)
-        except Teacher.DoesNotExist:
-            return JsonResponse({
-                "status": 404,
-                "errorMessage": "Profil guru tidak ditemukan untuk user ini."
-            }, status=404)
-
-        # 2. Get the requested class and verify the teacher is the waliKelas
-        try:
-            kelas = Kelas.objects.get(id=kelas_id, waliKelas=teacher, isActive=True, isDeleted=False)
-        except Kelas.DoesNotExist:
-            return JsonResponse({
-                "status": 404,
-                "errorMessage": "Kelas tidak ditemukan, tidak aktif, atau Anda bukan wali kelas untuk kelas ini."
-            }, status=404)
-
-        # 3. Get and validate month and year from query parameters
-        month_param = request.query_params.get('month')
-        year_param = request.query_params.get('year', str(timezone.now().year)) # Default to current year string
-
-        if not month_param:
-            return JsonResponse({
-                "status": 400,
-                "errorMessage": "Parameter query 'month' (1-12) wajib disertakan."
-            }, status=400)
-
-        try:
-            month = int(month_param)
-            year = int(year_param)
-            if not 1 <= month <= 12:
-                 return JsonResponse({
-                    "status": 400,
-                    "errorMessage": "Parameter 'month' harus berupa angka antara 1 dan 12."
-                }, status=400)
-             # Add a basic year check, adjust range as needed
-            if year < 2000 or year > timezone.now().year + 5:
-                 return JsonResponse({
-                    "status": 400,
-                    "errorMessage": f"Parameter 'year' tidak valid. Gunakan tahun yang masuk akal (cth. 2000 - {timezone.now().year + 5})."
-                }, status=400)
-
-        except ValueError:
-            return JsonResponse({
-                "status": 400,
-                "errorMessage": "Parameter 'month' dan 'year' harus berupa angka valid."
-            }, status=400)
-
-        # 4. Determine the date range for the month
-        try:
-            start_date_month = date(year, month, 1)
-            last_day_of_month = calendar.monthrange(year, month)[1]
-            end_date_month = date(year, month, last_day_of_month)
-        except (calendar.IllegalMonthError, ValueError) as e:
-             return JsonResponse({
-                "status": 400,
-                "errorMessage": f"Bulan atau tahun yang diminta tidak valid: {e}"
-            }, status=400)
-
-        # 5. Get all attendance records for this class within the monthly range (only process weekdays)
-        # We only need records for weekdays within the month to count attendance.
-        weekday_records_in_month_queryset = AbsensiHarian.objects.filter(
-            kelas=kelas,
-            date__gte=start_date_month,
-            date__lte=end_date_month,
-            date__week_day__range=(2, 6) # Filter for Mon (2) to Fri (6)
-        ).order_by('date')
-
-        # Calculate the total number of possible attendance days (number of Mon-Fri records found)
-        # This is the denominator for the monthly attendance percentage.
-        total_possible_days_in_month = weekday_records_in_month_queryset.count()
-
-        # 6. Get all students in the class
-        students_in_class = kelas.siswa.all()
-        if not students_in_class.exists():
-             response_data = {
-                "kelas_info": {
-                    "id": kelas.id,
-                    "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
-                    "waliKelas": kelas.waliKelas.name if kelas.waliKelas else None,
-                    "totalSiswa": 0
-                },
-                 "month_info": {
-                    "year": year,
-                    "monthNumber": month,
-                    "monthName": {
-                         1: "Januari", 2: "Februari", 3: "Maret", 4: "April",
-                         5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus",
-                         9: "September", 10: "Oktober", 11: "November", 12: "Desember"
-                     }.get(month, ""),
-                    "startDate": start_date_month.strftime('%Y-%m-%d'),
-                    "endDate": end_date_month.strftime('%Y-%m-%d'),
-                    "totalPossibleDaysInMonth": 0
-                },
-                "students_details": []
-             }
-             return JsonResponse({
-                "status": 200,
-                "message": "Kelas ini tidak memiliki siswa, tidak ada data analisis detail.",
-                "data": response_data
-            }, status=200)
-
-        # 7. Aggregate attendance data per student and per week (using corrected week number)
-        student_data_aggregator = {} # {student_id: {monthly_counts: {...}, weekly_counts: {week_num: {...}}}}
-        possible_statuses = ['Hadir', 'Sakit', 'Izin', 'Alfa']
-
-        # Keep track of unique week numbers encountered in the records
-        unique_week_numbers_in_month_data = set()
-
-        for student in students_in_class:
-             student_data_aggregator[student.user_id] = {
-                 "id": student.user_id,
-                 "name": student.name,
-                 "nisn": student.nisn,
-                 "monthly_counts": defaultdict(int),
-                 "weekly_counts": defaultdict(lambda: defaultdict(int)) # Nested defaultdict: week_num -> status -> count
-             }
-             # Initialize monthly counts for all statuses
-             for status in possible_statuses:
-                  student_data_aggregator[student.user_id]["monthly_counts"][status] = 0
-
-
-        # Iterate through each attendance record for the month's weekdays
-        for record in weekday_records_in_month_queryset:
-             current_date = record.date
-
-             # *** CORRECTED Week Number Calculation ***
-             week_of_month = get_week_of_month(current_date)
-             unique_week_numbers_in_month_data.add(week_of_month)
-
-
-             # Process each student's status in this daily record
-             for student_id_key, data in record.listSiswa.items():
-                  try:
-                       student_user_id = int(student_id_key)
-                  except ValueError:
-                       continue # Skip if key isn't a valid integer ID
-
-                  # Only process if the student ID is actually in the class's student list
-                  if student_user_id in student_data_aggregator:
-                       # Extract status, handling both dict and string formats
-                       status = data.get("status", data) if isinstance(data, dict) else data
-
-                       # Increment monthly count
-                       if status in possible_statuses:
-                           student_data_aggregator[student_user_id]["monthly_counts"][status] += 1
-
-                       # Increment weekly count for the specific week (using corrected week_of_month)
-                       if status in possible_statuses:
-                            student_data_aggregator[student_user_id]["weekly_counts"][week_of_month][status] += 1
-
-        # 8. Calculate percentages and format the final student details list
-        students_details_list = []
-        for student_id, agg_data in student_data_aggregator.items():
-            monthly_hadir_count = agg_data["monthly_counts"].get("Hadir", 0)
-            monthly_percentage = 0.0
-            # Use total_possible_days_in_month for the denominator if > 0
-            if total_possible_days_in_month > 0:
-                percentage = (monthly_hadir_count / total_possible_days_in_month) * 100
-
-
-            # Prepare weekly summaries for this student
-            weekly_summary_list = []
-            # Use the unique week numbers found in the data, sorted
-            sorted_week_nums = sorted(list(unique_week_numbers_in_month_data))
-
-            # For each week number that had records in this month
-            for week_num in sorted_week_nums:
-                 week_counts = agg_data["weekly_counts"].get(week_num, defaultdict(int)) # Get counts for this week num (defaultdict(int) if no entries)
-
-                 # *** CORRECTED Week Date Range Calculation ***
-                 clipped_week_start, clipped_week_end = get_week_date_range_in_month(year, month, week_num)
-
-                 # Determine the display date range string
-                 display_date_range = f"{clipped_week_start.day} {calendar.month_abbr[clipped_week_start.month]} - {clipped_week_end.day} {calendar.month_abbr[clipped_week_end.month]} {clipped_week_end.year}".replace('.', '') # Use clipped dates and remove dots from abbr
-
-
-                 # Need the number of possible attendance days *within this specific week's clipped date range*
-                 # Filter the original weekday_records_in_month_queryset for the specific clipped date range of this week
-                 possible_days_in_this_week = weekday_records_in_month_queryset.filter(
-                     date__gte=clipped_week_start,
-                     date__lte=clipped_week_end
-                 ).count()
-
-
-                 # Format weekly counts (ensure all statuses are included even if count is 0 for the week)
-                 formatted_weekly_counts = {
-                     status: f'{week_counts.get(status, 0)} hari' for status in possible_statuses
-                 }
-
-                 weekly_summary_list.append({
-                     "week_number": week_num,
-                     "date_range": display_date_range,
-                     "startDate": clipped_week_start.strftime('%Y-%m-%d'),
-                     "endDate": clipped_week_end.strftime('%Y-%m-%d'),
-                     "counts": formatted_weekly_counts,
-                     "possible_days_in_week": possible_days_in_this_week
-                 })
-
-            # Format monthly counts (ensure all statuses are included even if count is 0 for the month)
-            formatted_monthly_counts = {
-                 status: f'{agg_data["monthly_counts"].get(status, 0)} hari' for status in possible_statuses
-            }
-
-
-            students_details_list.append({
-                "id": agg_data["id"],
-                "name": agg_data["name"],
-                "nisn": agg_data["nisn"],
-                "monthly_percentage": round(monthly_percentage, 1),
-                "monthly_counts": formatted_monthly_counts,
-                "weekly_summary": weekly_summary_list
+        # build analysis list
+        analysis = []
+        for sid, vals in data.items():
+            hadir = vals["counts"]["Hadir"]
+            pct   = round(hadir / total_possible * 100, 1) if total_possible else 0.0
+            formatted = {s: f"{cnt} hari" for s, cnt in vals["counts"].items()}
+            analysis.append({
+                "id": sid,
+                "name": vals["name"],
+                "percentage": pct,
+                "counts": formatted
             })
 
-        # 9. Sort students by monthly percentage (highest first)
-        students_details_list.sort(key=lambda x: x['monthly_percentage'], reverse=True)
+        # sort DESC pct, ASC name
+        analysis.sort(key=lambda x: (-x["percentage"], x["name"]))
 
-        # 10. Assemble the final response data
-        response_data = {
-            "kelas_info": {
-                "id": kelas.id,
-                "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE) if kelas.namaKelas else None,
-                "waliKelas": kelas.waliKelas.name if kelas.waliKelas else None,
-                "totalSiswa": students_in_class.count()
-            },
-            "month_info": {
-                "year": year,
-                "monthNumber": month,
-                "monthName": {
-                     1: "Januari", 2: "Februari", 3: "Maret", 4: "April",
-                     5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus",
-                     9: "September", 10: "Oktober", 11: "November", 12: "Desember"
-                 }.get(month, ""),
-                 "startDate": start_date_month.strftime('%Y-%m-%d'),
-                 "endDate": end_date_month.strftime('%Y-%m-%d'),
-                 "totalPossibleDaysInMonth": total_possible_days_in_month # Count of weekdays with records
-            },
-            "students_details": students_details_list
-        }
+        top3    = analysis[:3]
+        bottom3 = sorted(analysis, key=lambda x: (x["percentage"], x["name"]))[:3]
 
         return JsonResponse({
-            "status": 200,
-            "message": "Detail analisis kehadiran bulanan siswa berhasil diambil",
-            "data": response_data
+            "status":200,
+            "message":"Analisis kehadiran bulanan berhasil diambil",
+            "data":{
+                "kelas_info":{
+                    "id": kelas.id,
+                    "namaKelas": re.sub(r"^Kelas\s+","",kelas.namaKelas,flags=re.IGNORECASE),
+                    "waliKelas": kelas.waliKelas.name,
+                    "totalSiswa": len(students)
+                },
+                "month_info":{
+                    "year": year,
+                    "monthNumber": month,
+                    "monthName": calendar.month_name[month].capitalize(),
+                    "startDate": start.strftime("%Y-%m-%d"),
+                    "endDate":   end.strftime("%Y-%m-%d"),
+                    "totalPossibleDaysInMonth": total_possible
+                },
+                "top_students": top3,
+                "bottom_students": bottom3
+            }
         }, status=200)
 
-    except Teacher.DoesNotExist:
-        return JsonResponse({
-            "status": 404,
-            "errorMessage": "Profil guru tidak ditemukan."
-        }, status=404)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         return JsonResponse({
-            "status": 500,
-            "errorMessage": f"Terjadi kesalahan internal saat mengambil detail analisis kehadiran bulanan: {str(e)}"
+            "status":500,
+            "errorMessage":f"Terjadi kesalahan internal saat mengambil analisis kehadiran bulanan: {e}"
         }, status=500)
-        
-        
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsTeacherRole])
 def get_monthly_student_attendance_detail(request, kelas_id):
     """
-    Detailed monthly student attendance breakdown, splitting the month into
-    calendar‐weeks as defined by get_month_weeks (so Jan week 1 is 6–10).
+    Detailed monthly student attendance breakdown for a class,
+    using only get_month_weeks(...) days as denominator, and sorted
+    by (-percentage, name).
     """
-    # 1. Fetch & validate
-    kelas = get_object_or_404(
-        Kelas,
-        id=kelas_id,
-        waliKelas__user=request.user,
-        isActive=True,
-        isDeleted=False
-    )
-    month = int(request.query_params.get('month', 0))
-    year  = int(request.query_params.get('year', date.today().year))
-    if not 1 <= month <= 12:
-        return JsonResponse({"status":400,"errorMessage":"'month' harus 1–12"}, status=400)
+    try:
+        teacher = Teacher.objects.get(user=request.user)
+        kelas   = Kelas.objects.get(
+            id=kelas_id, waliKelas=teacher, isActive=True, isDeleted=False
+        )
+        month = int(request.query_params.get('month') or 0)
+        year  = int(request.query_params.get('year', timezone.now().year))
+        if not 1 <= month <= 12:
+            return JsonResponse({"status":400,"errorMessage":"Bulan harus 1–12"}, status=400)
 
-    # 2. Build date‐range & load records
-    _, last_day = monthrange(year, month)
-    start_date = date(year, month, 1)
-    end_date   = date(year, month, last_day)
-    records = AbsensiHarian.objects.filter(
-        kelas=kelas,
-        date__gte=start_date,
-        date__lte=end_date,
-        date__week_day__range=(2,6)
-    ).order_by('date')
+        start = date(year, month, 1)
+        end   = date(year, month, monthrange(year, month)[1])
+        records = AbsensiHarian.objects.filter(
+            kelas=kelas,
+            date__gte=start,
+            date__lte=end
+        )
+        rec_by_date = {r.date: r for r in records}
 
-    # 3. Build our “weeks” blocks (with Jan1 forced)
-    weeks = get_month_weeks(year, month)
-    rec_by_date = {r.date: r for r in records}
-    students = list(kelas.siswa.all())
-    possible_statuses = ['Hadir','Sakit','Izin','Alfa']
+        blocks = get_month_weeks(year, month)
+        total_possible = sum(len(wk_days) for *_ , wk_days in blocks)
 
-    # 4. Tally into per‐student/month and per‐student/week
-    monthly_totals = {s.user_id: defaultdict(int) for s in students}
-    weekly_totals  = {
-        s.user_id: {i+1: defaultdict(int) for i in range(len(weeks))}
-        for s in students
-    }
+        students = list(kelas.siswa.all())
+        possible_statuses = ['Hadir','Sakit','Izin','Alfa']
+        ind_months = {
+            1:"Januari",2:"Februari",3:"Maret",4:"April",
+            5:"Mei",6:"Juni",7:"Juli",8:"Agustus",
+            9:"September",10:"Oktober",11:"November",12:"Desember"
+        }
 
-    for idx, (ws, we, days) in enumerate(weeks, start=1):
-        for d in days:
-            rec = rec_by_date.get(d)
-            if not rec:
-                continue
-            for sid_str, data in rec.listSiswa.items():
-                try:
-                    sid = int(sid_str)
-                except ValueError:
-                    continue
-                status = data.get('status') if isinstance(data, dict) else data
-                if status in possible_statuses and sid in monthly_totals:
-                    monthly_totals[sid][status] += 1
-                    weekly_totals[sid][idx][status] += 1
+        # accumulate per-student
+        stats = {
+            s.user_id: {
+                "id": s.user_id,
+                "name": s.name,
+                "nisn": s.nisn,
+                "monthly_counts": dict.fromkeys(possible_statuses, 0),
+                "weekly_summary": []
+            }
+            for s in students
+        }
 
-    # 5. Build student_details output
-    students_details = []
-    total_records = len(records)
-    for s in students:
-        sid = s.user_id
-        hadir_count = monthly_totals[sid]['Hadir']
-        monthly_pct = round(hadir_count / (kelas.siswa.count() * total_records) * 100, 1) \
-                      if total_records else 0.0
+        # build weekly summaries _and_ accumulate monthly_counts
+        for idx, (wstart, wend, wk_days) in enumerate(blocks, start=1):
+            # count each student in this block
+            for s in students:
+                sid = s.user_id
+                cnts = dict.fromkeys(possible_statuses, 0)
+                for d in wk_days:
+                    rec = rec_by_date.get(d)
+                    if not rec:
+                        continue
+                    raw = rec.listSiswa.get(str(sid))
+                    if not raw:
+                        continue
+                    stv = raw.get("status", raw) if isinstance(raw, dict) else raw
+                    if stv in possible_statuses:
+                        cnts[stv] += 1
+                        stats[sid]["monthly_counts"][stv] += 1
 
-        weekly_summary = []
-        for idx, (ws, we, days) in enumerate(weeks, start=1):
-            counts = weekly_totals[sid][idx]
-            weekly_summary.append({
-                "week_number": idx,
-                "date_range": f"{ws.day} – {we.day} {calendar.month_name[we.month]}",
-                "startDate": ws.strftime('%Y-%m-%d'),
-                "endDate":   we.strftime('%Y-%m-%d'),
-                "counts": {st: f"{counts[st]} hari" for st in possible_statuses},
-                "possible_days_in_week": len(days)
+                # format the date_range
+                if wstart.month == wend.month:
+                    dr = f"{wstart.day} – {wend.day} {ind_months[month]}"
+                else:
+                    dr = f"{wstart.day} {ind_months[wstart.month]} – {wend.day} {ind_months[wend.month]}"
+
+                stats[sid]["weekly_summary"].append({
+                    "week_number": idx,
+                    "date_range": f"{dr} {year}",
+                    "startDate": wstart.strftime("%Y-%m-%d"),
+                    "endDate":   wend.strftime("%Y-%m-%d"),
+                    "counts": {st: f"{cnts[st]} hari" for st in possible_statuses},
+                    "possible_days_in_week": len(wk_days)
+                })
+
+        # build final details list
+        details = []
+        for sid, info in stats.items():
+            hadir = info["monthly_counts"]["Hadir"]
+            pct   = round(hadir / total_possible * 100, 1) if total_possible else 0.0
+
+            details.append({
+                "id": sid,
+                "name": info["name"],
+                "nisn": info["nisn"],
+                "monthly_percentage": pct,
+                "monthly_counts": {
+                    st: f"{info['monthly_counts'][st]} hari" for st in possible_statuses
+                },
+                "weekly_summary": info["weekly_summary"]
             })
 
-        students_details.append({
-            "id": sid,
-            "name": s.name,
-            "monthly_percentage": monthly_pct,
-            "monthly_counts": {st: f"{monthly_totals[sid][st]} hari" for st in possible_statuses},
-            "weekly_summary": weekly_summary
-        })
+        # sort by -pct, then name
+        details.sort(key=lambda x: (-x["monthly_percentage"], x["name"]))
 
-    students_details.sort(key=lambda x: x['monthly_percentage'], reverse=True)
+        return JsonResponse({
+            "status":200,
+            "message":"Detail analisis kehadiran bulanan siswa berhasil diambil",
+            "data":{
+                "kelas_info":{
+                    "id": kelas.id,
+                    "namaKelas": re.sub(r"^Kelas\s+","",kelas.namaKelas,flags=re.IGNORECASE),
+                    "waliKelas": kelas.waliKelas.name,
+                    "totalSiswa": len(students)
+                },
+                "month_info":{
+                    "year": year,
+                    "monthNumber": month,
+                    "monthName": ind_months[month],
+                    "startDate": start.strftime("%Y-%m-%d"),
+                    "endDate":   end.strftime("%Y-%m-%d"),
+                    "totalPossibleDaysInMonth": total_possible
+                },
+                "students_details": details
+            }
+        }, status=200)
 
-    # 6. Return
-    return JsonResponse({
-        "status":200,
-        "message":"Detail analisis kehadiran bulanan berhasil diambil",
-        "data": {
-            "kelas_info": {
-                "id": kelas.id,
-                "namaKelas": kelas.namaKelas,
-                "waliKelas": kelas.waliKelas.name,
-                "totalSiswa": len(students)
-            },
-            "month_info": {
-                "year": year,
-                "monthNumber": month,
-                "monthName": calendar.month_name[month],
-                "startDate": start_date.strftime('%Y-%m-%d'),
-                "endDate": end_date.strftime('%Y-%m-%d'),
-                "totalPossibleDaysInMonth": total_records
-            },
-            "students_details": students_details
-        }
-    }, status=200)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JsonResponse({"status":500,"errorMessage":f"Internal error: {e}"},status=500)
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsTeacherRole])
 def get_yearly_attendance_summary(request, kelas_id):
     """
-    Yearly attendance summary split into per-month blocks, each containing
-    calendar-week summaries via get_month_weeks.
+    Get yearly attendance summary with monthly and weekly breakdowns for a specific class.
+    Only the waliKelas teacher may access.
     """
-    kelas = get_object_or_404(
-        Kelas,
-        id=kelas_id,
-        waliKelas__user=request.user,
-        isActive=True,
-        isDeleted=False
-    )
-    year = int(request.query_params.get('year', date.today().year))
-    if year < 2000 or year > date.today().year + 5:
-        return JsonResponse({"status":400,"errorMessage":"Tahun di luar rentang wajar."}, status=400)
+    try:
+        teacher = Teacher.objects.get(user=request.user)
+        kelas   = Kelas.objects.get(
+            id=kelas_id,
+            waliKelas=teacher,
+            isActive=True,
+            isDeleted=False
+        )
+        
+        year = int(request.query_params.get('year', timezone.now().year))
+        if year < 2000 or year > timezone.now().year + 5:
+            raise ValueError("Tahun di luar rentang wajar.")
+        
+        total_students    = kelas.siswa.count()
+        possible_statuses = ['Hadir', 'Sakit', 'Izin', 'Alfa']
+        ind_months = {
+            1:"Januari",2:"Februari",3:"Maret",4:"April",
+            5:"Mei",6:"Juni",7:"Juli",8:"Agustus",
+            9:"September",10:"Oktober",11:"November",12:"Desember"
+        }
+        cal = Calendar(firstweekday=0)  # Monday=0
+        
+        monthly_summaries = []
+        
+        for month in range(1, 13):
+            # --- fetch all weekday records for that month ---
+            records = AbsensiHarian.objects.filter(
+                kelas=kelas,
+                date__year=year,
+                date__month=month,
+                date__week_day__range=(2, 6)
+            ).order_by('date')
+            
+            # --- build our calendar-week blocks & total possible days ---
+            blocks = get_month_weeks(year, month)  # uses your existing helper
+            total_possible_days = sum(len(wk_days) for *_ , wk_days in blocks)
+            
+            # --- iterate blocks exactly as before to build weekly_summaries & daily_details ---
+            weeks_data    = []
+            monthly_total = defaultdict(int)
+            
+            for idx, (wstart, wend, wk_days) in enumerate(blocks, start=1):
+                # grab whatever records fall into this block
+                week_recs = records.filter(date__gte=wstart, date__lte=wend)
+                
+                # build the same `daily_details` placeholder + fill logic
+                daily = {}
+                for d in wk_days:
+                    date_str = d.strftime("%Y-%m-%d")
+                    daily[date_str] = {
+                        "day_name": ["Senin","Selasa","Rabu","Kamis","Jumat"][d.weekday()],
+                        "date": date_str,
+                        "counts": {s: 0 for s in possible_statuses},
+                        "has_record": False,
+                        "attendance_percentage": 0.0
+                    }
+                
+                # fill in real data
+                for rec in week_recs:
+                    ds = rec.date.strftime("%Y-%m-%d")
+                    day_counts = defaultdict(int)
+                    for sid, data in rec.listSiswa.items():
+                        st = data.get("status", data) if isinstance(data, dict) else data
+                        if st in possible_statuses:
+                            day_counts[st] += 1
+                            monthly_total[st] += 1
+                    hadir = min(day_counts.get("Hadir", 0), total_students)
+                    pct   = round(hadir / total_students * 100, 1) if total_students else 0.0
+                    daily[ds].update({
+                        "has_record": True,
+                        "counts": dict(day_counts),
+                        "attendance_percentage": pct
+                    })
+                
+                # first, count each status once per-day 
+                weekly_tot = defaultdict(int)
+                for rec in week_recs:
+                    for sid, data in rec.listSiswa.items():
+                        st = data.get("status", data) if isinstance(data, dict) else data
+                        if st in possible_statuses:
+                            weekly_tot[st] += 1
 
-    possible_statuses = ['Hadir','Sakit','Izin','Alfa']
-    monthly_summaries = []
+                # denominator is total_students × number of days in this week (wk_days)
+                slots = total_students * len(wk_days)
+                weekly_avg = {
+                    s: round(weekly_tot[s] / slots * 100, 1) if slots else 0.0
+                    for s in possible_statuses
+                }
 
-    for month in range(1,13):
-        # fetch this month's Mon–Fri records
-        records = AbsensiHarian.objects.filter(
-            kelas=kelas,
-            date__year=year,
-            date__month=month,
-            date__week_day__range=(2,6)
-        ).order_by('date')
-        rec_by_date = {r.date: r for r in records}
-        weeks = get_month_weeks(year, month)
-
-        # monthly tally
-        monthly_tot = defaultdict(int)
-        for rec in records:
-            for data in rec.listSiswa.values():
-                status = data.get('status') if isinstance(data, dict) else data
-                if status in possible_statuses:
-                    monthly_tot[status] += 1
-
-        # build each week's summary
-        weeks_data = []
-        for idx,(ws, we, days) in enumerate(weeks, start=1):
-            week_tot = defaultdict(int)
-            for d in days:
-                rec = rec_by_date.get(d)
-                if not rec: continue
-                for data in rec.listSiswa.values():
-                    status = data.get('status') if isinstance(data, dict) else data
-                    if status in possible_statuses:
-                        week_tot[status] += 1
-
-            slots = kelas.siswa.count() * len(days)
-            weeks_data.append({
-                "week_info": {
-                    "startDate": ws.strftime('%Y-%m-%d'),
-                    "endDate":   we.strftime('%Y-%m-%d'),
-                    "displayWeek": f"Minggu {idx}: {ws.day} – {we.day} {calendar.month_name[we.month]}"
+                # displayWeek formatting unchanged
+                if wstart.month == wend.month:
+                    display = f"{wstart.day} – {wend.day} {ind_months[month]}"
+                else:
+                    display = (
+                        f"{wstart.day} {ind_months[wstart.month]} – "
+                        f"{wend.day} {ind_months[wend.month]}"
+                    )
+                
+                weeks_data.append({
+                    "week_info": {
+                        "startDate": wstart.strftime("%Y-%m-%d"),
+                        "endDate":   wend.strftime("%Y-%m-%d"),
+                        "displayWeek": f"Minggu {idx}: {display}"
+                    },
+                    "weekly_averages": weekly_avg,
+                    "daily_details": sorted(daily.values(), key=lambda d: d["date"])
+                })
+            
+            # --- monthly averages now use total_possible_days, not records.count() ---
+            month_slots = total_students * total_possible_days
+            raw_m      = {
+                s: (monthly_total[s] / month_slots * 100) if month_slots else 0.0
+                for s in possible_statuses
+            }
+            sum_m     = sum(raw_m.values())
+            monthly_avg = {
+                s: round((raw_m[s] / sum_m) * 100, 1) if sum_m else 0.0
+                for s in possible_statuses
+            }
+            
+            monthly_summaries.append({
+                "month_info": {
+                    "year": year,
+                    "monthNumber": month,
+                    "monthName": ind_months[month],
+                    "startDate": date(year, month, 1).strftime("%Y-%m-%d"),
+                    "endDate": date(year, month, monthrange(year, month)[1]).strftime("%Y-%m-%d"),
+                    "totalDays": total_possible_days
                 },
                 "weekly_averages": {
                     st: round(week_tot[st] / slots * 100, 1) if slots else 0.0
                     for st in possible_statuses
                 }
             })
-
-        # monthly averages
-        slots_month = kelas.siswa.count() * records.count()
-        monthly_avg = {
-            st: round(monthly_tot[st] / slots_month * 100, 1) if slots_month else 0.0
-            for st in possible_statuses
-        }
-
-        monthly_summaries.append({
-            "month_info": {
+        
+        return JsonResponse({
+            "status": 200,
+            "message": "Ringkasan kehadiran tahunan berhasil diambil",
+            "data": {
+                "kelas_info": {
+                    "id": kelas.id,
+                    "namaKelas": re.sub(r'^Kelas\s+', '', kelas.namaKelas, flags=re.IGNORECASE),
+                    "waliKelas": kelas.waliKelas.name,
+                    "totalSiswa": total_students
+                },
                 "year": year,
-                "monthNumber": month,
-                "monthName": calendar.month_name[month],
-                "startDate": date(year,month,1).strftime('%Y-%m-%d'),
-                "endDate": date(year,month,monthrange(year,month)[1]).strftime('%Y-%m-%d'),
-                "totalDays": records.count()
-            },
-            "monthly_averages": monthly_avg,
-            "weekly_summaries": weeks_data
-        })
-
-    return JsonResponse({
-        "status":200,
-        "message":"Ringkasan kehadiran tahunan berhasil diambil",
-        "data": {
-            "kelas_info": {
-                "id": kelas.id,
-                "namaKelas": kelas.namaKelas,
-                "waliKelas": kelas.waliKelas.name,
-                "totalSiswa": kelas.siswa.count()
-            },
-            "year": year,
-            "monthly_summaries": monthly_summaries
-        }
-    }, status=200)
+                "monthly_summaries": monthly_summaries
+            }
+        }, status=200)
+    
+    except Teacher.DoesNotExist:
+        return JsonResponse({"status":404,"errorMessage":"Profil guru tidak ditemukan."},status=404)
+    except Kelas.DoesNotExist:
+        return JsonResponse({"status":404,"errorMessage":"Kelas tidak ditemukan atau Anda bukan wali kelas."},status=404)
+    except ValueError as ve:
+        return JsonResponse({"status":400,"errorMessage":str(ve)},status=400)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JsonResponse({"status":500,"errorMessage":f"Internal error: {e}"},status=500)
