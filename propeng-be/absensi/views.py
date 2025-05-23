@@ -843,8 +843,8 @@ def get_monthly_student_attendance_analysis(request, kelas_id):
         # sort DESC pct, ASC name
         analysis.sort(key=lambda x: (-x["percentage"], x["name"]))
 
-        top3    = analysis[:3]
-        bottom3 = sorted(analysis, key=lambda x: (x["percentage"], x["name"]))[:3]
+        top5    = analysis[:5]
+        bottom5 = sorted(analysis, key=lambda x: (x["percentage"], x["name"]))[:5]
 
         return JsonResponse({
             "status":200,
@@ -864,8 +864,8 @@ def get_monthly_student_attendance_analysis(request, kelas_id):
                     "endDate":   end.strftime("%Y-%m-%d"),
                     "totalPossibleDaysInMonth": total_possible
                 },
-                "top_students": top3,
-                "bottom_students": bottom3
+                "top_students": top5,
+                "bottom_students": bottom5
             }
         }, status=200)
 
