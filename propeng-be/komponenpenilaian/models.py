@@ -1,3 +1,4 @@
+from django.forms import ValidationError
 from django.utils import timezone
 from django.db import models
 from matapelajaran.models import MataPelajaran 
@@ -27,7 +28,12 @@ class KomponenPenilaian(models.Model):
         related_name="komponenpenilaian_matpel"
     )
 
+    def clean(self):
+        if self.mataPelajaran and not self.mataPelajaran.is_active:
+            raise ValidationError("Tidak dapat menyimpan komponen karena Mata Pelajaran sudah tidak aktif.")
+
     def save(self, *args, **kwargs):
+        self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self):
