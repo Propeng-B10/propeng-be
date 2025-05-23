@@ -1152,7 +1152,10 @@ def mata_pelajaran_student_count(kelas_id):
     kelas = Kelas.objects.get(id=kelas_id)
     siswa_user_ids = kelas.siswa.all().values_list('user_id', flat=True)
 
-    matpels = MataPelajaran.objects.filter(siswa_terdaftar__user_id__in=siswa_user_ids).distinct()
+    matpels = MataPelajaran.objects.filter(
+        siswa_terdaftar__user_id__in=siswa_user_ids,
+        tahunAjaran=kelas.tahunAjaran
+    ).distinct()
 
     hasil = []
     max_count = 0

@@ -799,7 +799,10 @@ def calculate_class_distribution(kelas_id):
     kelas = Kelas.objects.get(id=kelas_id)
     siswa_ids = kelas.siswa.values_list('user_id', flat=True)
 
-    nilai_qs = Nilai.objects.filter(student_id__in=siswa_ids).select_related(
+    nilai_qs = Nilai.objects.filter(
+        student_id__in=siswa_ids,
+        komponen__mataPelajaran__tahunAjaran=kelas.tahunAjaran
+    ).select_related(
         'komponen__mataPelajaran'
     )
 
@@ -827,11 +830,13 @@ def calculate_subject_avg_and_distribution_all(kelas_id):
     kelas = Kelas.objects.get(id=kelas_id)
     siswa_ids = kelas.siswa.values_list('user_id', flat=True)
 
-    nilai_qs = Nilai.objects.filter(student_id__in=siswa_ids).select_related(
+    nilai_qs = Nilai.objects.filter(
+        student_id__in=siswa_ids,
+        komponen__mataPelajaran__tahunAjaran=kelas.tahunAjaran
+    ).select_related(
         'komponen__mataPelajaran'
     )
 
-    # Nested: {mataPelajaran: {student_id: [nilai1, nilai2, ...]}}
     nilai_per_matpel = defaultdict(lambda: defaultdict(list))
 
     for nilai in nilai_qs:
@@ -871,11 +876,13 @@ def calculate_subject_avg_and_distribution_by_jenis(kelas_id):
     kelas = Kelas.objects.get(id=kelas_id)
     siswa_ids = kelas.siswa.values_list('user_id', flat=True)
 
-    nilai_qs = Nilai.objects.filter(student_id__in=siswa_ids).select_related(
+    nilai_qs = Nilai.objects.filter(
+        student_id__in=siswa_ids,
+        komponen__mataPelajaran__tahunAjaran=kelas.tahunAjaran
+    ).select_related(
         'komponen__mataPelajaran'
     )
 
-    # Nested: { (mataPelajaran, jenis): {student_id: [nilai1, nilai2, ...]} }
     nilai_per_matpel_jenis = defaultdict(lambda: defaultdict(list))
 
     for nilai in nilai_qs:
@@ -915,8 +922,11 @@ def get_top_and_risk_students(kelas_id):
 
     nilai_qs = (
         Nilai.objects
-        .filter(student__id__in=siswa_ids)
-        .select_related('student', 'komponen')
+        .filter(
+            student__id__in=siswa_ids,
+            komponen__mataPelajaran__tahunAjaran=kelas.tahunAjaran
+        )
+        .select_related('student', 'komponen', 'komponen__mataPelajaran')
     )
 
     nilai_per_siswa = defaultdict(lambda: {
