@@ -163,6 +163,31 @@ def grade_data_view(request: Request, matapelajaran_id: int):
     except MataPelajaran.DoesNotExist: 
         return drf_error_response(f"MatPel tidak ditemukan.", status.HTTP_404_NOT_FOUND)
 
+    # --- PERMISSION CHECKING ---
+    is_subject_teacher = matapelajaran.teacher and requesting_teacher and matapelajaran.teacher == requesting_teacher
+    is_wali_kelas_for_student_in_subject = False
+
+    if requesting_teacher and not is_subject_teacher: # Only check wali kelas if user is a teacher AND not the subject teacher
+        # Get Student instances (queryset) to check against Kelas.siswa M2M field
+        students_in_subject_queryset = matapelajaran.siswa_terdaftar.filter(isActive=True, isDeleted=False)
+        if students_in_subject_queryset.exists():
+            is_wali_kelas_for_student_in_subject = Kelas.objects.filter(
+                siswa__in=students_in_subject_queryset, # Use the queryset of Student objects
+                waliKelas=requesting_teacher,
+                isActive=True,
+                isDeleted=False
+            ).exists()
+
+    if request.method == 'GET':
+        if requesting_teacher: # If the user is a teacher (requesting_teacher is not None)
+            if not is_subject_teacher and not is_wali_kelas_for_student_in_subject:
+                return drf_error_response(
+                    "Akses ditolak. Anda bukan guru mata pelajaran ini atau wali kelas dari siswa yang terdaftar di mata pelajaran ini.",
+                    status.HTTP_403_FORBIDDEN
+                )
+        # If not requesting_teacher (e.g., admin), or is_subject_teacher, or is_wali_kelas_for_student_in_subject,
+        # GET access is allowed to proceed.
+        
     # Only check teacher permissions for POST requests
     if request.method == 'POST':
         if not requesting_teacher:
@@ -283,7 +308,7 @@ def grade_data_view(request: Request, matapelajaran_id: int):
 
             # Validasi input lain (tanpa scoreType)
             if not all(k in data for k in ['studentId', 'componentId', 'score']) or not student_user_id or not component_id:
-                 return drf_error_response("Data tidak lengkap (membutuhkan studentId, componentId, score).", status.HTTP_400_BAD_REQUEST)
+                return drf_error_response("Data tidak lengkap (membutuhkan studentId, componentId, score).", status.HTTP_400_BAD_REQUEST)
 
             # Konversi & Validasi Score (SAMA)
             final_score = None

@@ -30,4 +30,6 @@ urlpatterns = [
 
     path('create/', views.create_evalguru, name='create_evalguru'),
     path('cek/<int:pk>/', views.get_cek_kelas, name='get_cek_kelas'),
+    path('matpel/<int:pk>/', views.get_evaluasi_guru, name='get_evalguru'),
+    path('permatpel/', views.get_evaluasi_guru_per_matpel, name='get_evalguru_detail'),
 ]

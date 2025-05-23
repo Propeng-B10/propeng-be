@@ -12,7 +12,7 @@ from rest_framework import status
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.decorators import permission_classes
 from rest_framework.permissions import IsAuthenticated
-from user.views import IsStudentRole
+from user.views import IsStudentRole, IsTeacherRole
 
 
 def get_student_main_class_info(student_obj):
@@ -682,14 +682,18 @@ def create_evalguru(request):
         if not request.user.role != 'Student':
             return JsonResponse({"status": status.HTTP_403_FORBIDDEN, "message": "Hanya siswa yang dapat mengisi evaluasi."}, status=status.HTTP_403_FORBIDDEN)
         isian = data.get('isian')
-        if not isian:
-            return JsonResponse({"status": status.HTTP_400_BAD_REQUEST, "message": "Data isian tidak ditemukan."}, status=status.HTTP_400_BAD_REQUEST)
         # isian -> {"1":{"1":3,"2":4}, "2":{1:5,"2":3}}
         kritik_saran = data.get('kritik_saran')
         siswa_id = request.user.id
         matapelajaran_id = data.get('matapelajaran_id')
         siswa_obj = Student.objects.get(pk=siswa_id)
         matapelajaran_obj = MataPelajaran.objects.get(pk=matapelajaran_id)
+        c = False
+        for i in matapelajaran_obj.siswa_terdaftar.all():
+            if i.user_id == siswa_id:
+                c = True
+        if not c:
+            return JsonResponse({"status": status.HTTP_403_FORBIDDEN, "message": "Siswa tidak terdaftar di mata pelajaran ini."}, status=status.HTTP_400_BAD_REQUEST)
         guru_obj = matapelajaran_obj.teacher
         if guru_obj is None:    
             return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": "Guru tidak ditemukan untuk mata pelajaran ini."}, status=status.HTTP_404_NOT_FOUND)
@@ -716,4 +720,212 @@ def create_evalguru(request):
     except Student.DoesNotExist:
         return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": "Siswa tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        return JsonResponse({"status": status.message, "message": f"Terjadi kesalahan: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return JsonResponse({"status": status, "message": f"Terjadi kesalahan: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_evaluasi_guru(request, pk):
+    guru_id_str = request.user.id
+    if not guru_id_str:
+        return JsonResponse({"status": status.HTTP_400_BAD_REQUEST, "message": "Hanya Guru pengajar itu sendiri yang dapat melihat!."}, status=status.HTTP_400_BAD_REQUEST)
+    matapelajaran_id_str = pk
+
+    try:
+        guru_id = int(guru_id_str)
+        matapelajaran_id = int(matapelajaran_id_str)
+    except ValueError:
+        return JsonResponse({"status": status.HTTP_400_BAD_REQUEST, "message": "ID guru dan ID mata pelajaran harus berupa angka."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        guru_obj = Teacher.objects.get(user_id=guru_id)
+        matapelajaran_obj = MataPelajaran.objects.get(id=matapelajaran_id)
+    except Teacher.DoesNotExist:
+        return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": "Guru tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+    except MataPelajaran.DoesNotExist:
+        return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": "Mata pelajaran tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+    if matapelajaran_obj.teacher != guru_obj:
+        return JsonResponse({"status": status.HTTP_403_FORBIDDEN, "message": "Hanya guru pengajar itu sendiri yang dapat melihat!"}, status=status.HTTP_403_FORBIDDEN)
+    if not guru_obj or not matapelajaran_obj:
+        return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": "Guru atau mata pelajaran tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+    evaluations = isianEvalGuru.objects.filter(
+        guru=guru_obj,
+        matapelajaran=matapelajaran_obj
+    ).select_related('siswa', 'guru', 'matapelajaran')
+    if not evaluations.exists():
+        return JsonResponse({"status": status.HTTP_200_OK, "message": "Tidak ada data evaluasi untuk guru ini di mata pelajaran ini."}, status=status.HTTP_200_OK)
+    response_data = []
+    # Create data structures to hold our aggregated data
+    scores_by_variable_indicator = defaultdict(lambda: defaultdict(list))
+    all_kritik_saran = set()  # Using a set to avoid duplicates
+    total_pengisi = 0
+
+    # Collect data from all evaluations
+    for evaluation in evaluations:
+        total_pengisi += 1
+        if evaluation.kritik_saran and evaluation.kritik_saran.strip():
+            all_kritik_saran.add(evaluation.kritik_saran.strip())
+        
+        # Process the nested dictionary of scores
+        if isinstance(evaluation.isian, dict):
+            for var_id_str, indicators in evaluation.isian.items():
+                if isinstance(indicators, dict):
+                    for ind_id_str, score in indicators.items():
+                        if isinstance(score, (int, float)) and 1 <= score <= 5:
+                            scores_by_variable_indicator[var_id_str][ind_id_str].append(score)    # Calculate averages per variable - ensure all 4 variables are always included
+    variable_averages = {}
+    if hasattr(EvalGuru, 'pilihanvariabel'):
+        # First, initialize all variables with default value "- / 5.00"
+        for var_choice in EvalGuru.pilihanvariabel:
+            var_id_int = var_choice[0]
+            var_id_str = str(var_id_int)
+            variable_averages[var_id_str] = "- / 5.00"
+        
+        # Then calculate averages for variables that have data
+        for var_choice in EvalGuru.pilihanvariabel:
+            var_id_int = var_choice[0]
+            var_id_str = str(var_id_int)
+            
+            all_scores_for_var = []
+            for scores in scores_by_variable_indicator.get(var_id_str, {}).values():
+                all_scores_for_var.extend(scores)
+            
+            if all_scores_for_var:
+                variable_averages[var_id_str] = f"{sum(all_scores_for_var) / len(all_scores_for_var):.2f} / 5.00"    # Calculate averages per indicator
+    indicator_detail = []
+    if hasattr(EvalGuru, 'pilihanvariabel') and hasattr(EvalGuru, 'pilihanindikator'):
+        for var_choice in EvalGuru.pilihanvariabel:
+            var_id_int = var_choice[0]
+            var_id_str = str(var_id_int)
+            
+            data_per_var = {"variabel_id": var_id_int}
+            
+            # Get all possible indicators from EvalGuru.pilihanindikator
+            available_indicators = []
+            for ind_choice in EvalGuru.pilihanindikator:
+                ind_id_int = ind_choice[0]
+                ind_id_str = str(ind_id_int)
+                available_indicators.append(ind_id_str)
+            
+            # First initialize all indicators for this variable with default value
+            for ind_id_str in available_indicators:
+                data_per_var[f"Indikator {ind_id_str}"] = "- / 5.00"
+            
+            # Then calculate averages for indicators that have data
+            # Get the actual indicators used for this variable from the collected data
+            indicator_ids = sorted(
+                scores_by_variable_indicator.get(var_id_str, {}).keys(),
+                key=lambda k: int(k) if k.isdigit() else k
+            )
+            
+            for ind_id_str in indicator_ids:
+                scores = scores_by_variable_indicator.get(var_id_str, {}).get(ind_id_str, [])
+                if scores:
+                    avg = sum(scores) / len(scores)
+                    data_per_var[f"Indikator {ind_id_str}"] = f"{avg:.2f} / 5.00"
+            
+            indicator_detail.append(data_per_var)    # Calculate grand total average - only from variables that have data
+    valid_var_avgs = []
+    for var_id_str in variable_averages.keys():
+        all_var_scores = []
+        for scores in scores_by_variable_indicator.get(var_id_str, {}).values():
+            all_var_scores.extend(scores)
+        if all_var_scores:
+            valid_var_avgs.append(sum(all_var_scores) / len(all_var_scores))
+
+    grand_total = f"{sum(valid_var_avgs) / len(valid_var_avgs):.2f} / 5.00" if valid_var_avgs else "- / 5.00"
+    
+    response_data = {
+        "nama_matapelajaran": matapelajaran_obj.nama if hasattr(matapelajaran_obj, 'nama') else "N/A",
+        "tahun_ajaran_mapel": str(matapelajaran_obj.tahunAjaran.tahunAjaran) if (hasattr(matapelajaran_obj, 'tahunAjaran') and matapelajaran_obj.tahunAjaran) else "N/A",
+        "ringkasan_skor_rata_rata_per_variabel": variable_averages,
+        "detail_skor_rata_rata_per_indikator": indicator_detail,
+        "skor_grand_total": grand_total,
+        "daftar_kritik_saran": sorted(list(all_kritik_saran)) if all_kritik_saran else ["Tidak ada kritik/saran."],
+        "total_pengisi_evaluasi": total_pengisi,
+        "total_siswa_diajar_di_matapelajaran": len(matapelajaran_obj.siswa_terdaftar.all()) if hasattr(matapelajaran_obj, 'siswa_terdaftar') else 0,
+    }
+    return JsonResponse({
+        "status": status.HTTP_200_OK,
+        "message": "Berhasil mendapatkan data evaluasi guru.",
+        "evaluasi_guru": response_data
+    }, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsTeacherRole])
+def get_evaluasi_guru_per_matpel(request):
+    guru_id_str = request.user.id
+    if not guru_id_str:
+        return JsonResponse({"status": status.HTTP_400_BAD_REQUEST, "message": "Hanya Guru pengajar itu sendiri yang dapat melihat!."}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        guru_id = int(guru_id_str)
+    except ValueError:
+        return JsonResponse({"status": status.HTTP_400_BAD_REQUEST, "message": "ID guru harus berupa angka."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        guru_obj = Teacher.objects.get(user_id=guru_id)
+    except Teacher.DoesNotExist:
+        return JsonResponse({"status": status.HTTP_404_NOT_FOUND, "message": "Guru tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+    
+    response_data = []
+    all_mataPelajaran_obj = MataPelajaran.objects.filter(teacher=guru_obj)
+    
+    
+    for matpel in all_mataPelajaran_obj:
+        evaluation_per_class = isianEvalGuru.objects.filter(
+            guru=guru_obj,
+            matapelajaran=matpel
+        )
+        
+        # Get total students registered in the course
+        total_students = matpel.siswa_terdaftar.count() if hasattr(matpel, 'siswa_terdaftar') else 0
+        
+        # Count of unique students who submitted evaluations
+        total_pengisi = evaluation_per_class.values('siswa').distinct().count()
+        
+        # Get tahun ajaran
+        tahun_ajaran_str = str(matpel.tahunAjaran.tahunAjaran) if hasattr(matpel, 'tahunAjaran') and matpel.tahunAjaran else "N/A"
+        
+        # Initialize data structure for this mata pelajaran
+        matpel_data = {
+            "matapelajaran_id": matpel.id,
+            "nama_matapelajaran": matpel.nama if hasattr(matpel, 'nama') else "N/A",
+            "tahun_ajaran": tahun_ajaran_str,
+            "total_siswa": total_students,
+            "total_pengisi_evaluasi": total_pengisi,
+            "skor_rata_rata": {}
+        }
+        
+        # If there are evaluations, calculate average scores
+        if evaluation_per_class.exists():
+            scores_by_variable = defaultdict(list)
+            
+            # Collect all scores per variable
+            for evaluation in evaluation_per_class:
+                if isinstance(evaluation.isian, dict):
+                    for var_id_str, indicators in evaluation.isian.items():
+                        if isinstance(indicators, dict):
+                            for _, score in indicators.items():
+                                if isinstance(score, (int, float)) and 1 <= score <= 5:
+                                    scores_by_variable[var_id_str].append(score)
+            
+            # Calculate average score for each variable
+            for var_choice in EvalGuru.pilihanvariabel:
+                var_id_int = var_choice[0]
+                var_id_str = str(var_id_int)
+                var_name = var_choice[1]
+                
+                scores = scores_by_variable.get(var_id_str, [])
+                if scores:
+                    avg_score = sum(scores) / len(scores)
+                    matpel_data["skor_rata_rata"][var_name] = f"{avg_score:.2f} / 5.00"
+                else:
+                    matpel_data["skor_rata_rata"][var_name] = "- / 5.00"
+        
+        response_data.append(matpel_data)
+    
+    return JsonResponse({
+        "status": status.HTTP_200_OK,
+        "message": "Berhasil mendapatkan data evaluasi per mata pelajaran",
+        "data": response_data
+    }, status=status.HTTP_200_OK)
