@@ -11,4 +11,5 @@ urlpatterns = [
     path('kelas/<int:kelas_id>/monthly-detail/', get_monthly_student_attendance_detail, name='monthly_student_attendance_detail'),
     path('kelas/<int:kelas_id>/monthly-overview/', get_monthly_student_attendance_detail, name='monthly_student_attendance_detail'),
     path('kelas/<int:kelas_id>/yearly-summary/', get_yearly_attendance_summary, name='yearly_attendance_summary'),
+    path('student/summary-by-class/<int:kelas_id>/', get_student_attendance_summary_by_class, name='get_student_attendance_summary_by_class'),
 ]
