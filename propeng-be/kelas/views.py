@@ -1229,3 +1229,22 @@ def kelas_insight_view(request, kelas_id):
         "subject_distribution_by_komponen": subjectAvgJenis,
         "student_data": topAndRiskStudent
     })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_student_classes(request):
+    user = request.user
+    try:
+        student = Student.objects.get(user=user)
+    except Student.DoesNotExist:
+        return JsonResponse({"status": 404, "errorMessage": "Siswa tidak ditemukan."}, status=404)
+    kelas_list = Kelas.objects.filter(isDeleted=False, siswa=student)
+    data = []
+    for k in kelas_list:
+        data.append({
+            "id": k.id,
+            "nama": re.sub(r'^Kelas\s+', '', k.namaKelas, flags=re.IGNORECASE) if k.namaKelas else None,
+            "tahun_ajaran": k.tahunAjaran.tahunAjaran if k.tahunAjaran else None,
+            "guru": k.waliKelas.name if k.waliKelas else None,
+        })
+    return JsonResponse({"status": 200, "data": data}, status=200)
