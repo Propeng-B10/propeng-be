@@ -980,3 +980,113 @@ def get_top_and_risk_students(kelas_id):
         'siswa_terbaik': siswa_terbaik,
         'siswa_risiko_akademik': siswa_risiko
     }
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_student_grades_by_kelas(request, kelas_id):
+    """
+    Ambil rekap nilai untuk siswa yang sedang login, tapi berdasarkan kelas tertentu (bukan hanya kelas aktif).
+    """
+    try:
+        user = request.user
+        if user.role != 'student':
+            return Response({"message": "Akses ditolak. Hanya untuk siswa.", "error": True}, status=403)
+        try:
+            student = Student.objects.select_related('user').get(user=user)
+            if not student.isActive or student.isDeleted:
+                return Response({"message": "Profil siswa tidak aktif.", "error": True}, status=403)
+        except Student.DoesNotExist:
+            return Response({"message": "Profil siswa tidak ditemukan.", "error": True}, status=404)
+
+        # Check if siswa terdaftar di kelas_id
+        try:
+            kelas = Kelas.objects.select_related('waliKelas', 'tahunAjaran').get(id=kelas_id, siswa=student)
+        except Kelas.DoesNotExist:
+            return Response({"message": "Kelas tidak ditemukan atau Anda tidak terdaftar di kelas ini.", "error": True}, status=404)
+
+        # Cari nilai yang sesuai tahun ajaran kelas INI
+        nilai_list = Nilai.objects.filter(
+            student=user,
+            komponen__mataPelajaran__tahunAjaran=kelas.tahunAjaran,
+            komponen__mataPelajaran__siswa_terdaftar=student,
+            komponen__mataPelajaran__isActive=True,
+            komponen__mataPelajaran__isDeleted=False,
+        ).select_related('komponen__mataPelajaran', 'komponen').order_by(
+            'komponen__mataPelajaran__nama',
+            'komponen__tipeKomponen',
+            'komponen__namaKomponen'
+        )
+
+        # --- Copy-paste your existing grouping logic ---
+        nilai_per_matpel_grouped = defaultdict(lambda: {
+            'id': None, 'nama': None, 'kategori': None, 'kode': None,
+            'capaian_pengetahuan': None, 'capaian_keterampilan': None,
+            'pengetahuan': [], 'keterampilan': []
+        })
+        from capaiankompetensi.models import CapaianKompetensi
+        from nilai.views import calculate_weighted_average, get_grade
+
+        processed_matpel_ids = set()
+        for nilai_record in nilai_list:
+            komponen = nilai_record.komponen
+            matpel = komponen.mataPelajaran
+            matpel_id_str = str(matpel.id)
+
+            if matpel.id not in processed_matpel_ids:
+                capaian_pengetahuan_desc = None
+                capaian_keterampilan_desc = None
+                capaian_qs = CapaianKompetensi.objects.filter(mata_pelajaran=matpel)
+                for capaian in capaian_qs:
+                    if capaian.tipe == CapaianKompetensi.PENGETAHUAN:
+                        capaian_pengetahuan_desc = capaian.deskripsi
+                    elif capaian.tipe == CapaianKompetensi.KETERAMPILAN:
+                        capaian_keterampilan_desc = capaian.deskripsi
+                nilai_per_matpel_grouped[matpel_id_str]['capaian_pengetahuan'] = capaian_pengetahuan_desc
+                nilai_per_matpel_grouped[matpel_id_str]['capaian_keterampilan'] = capaian_keterampilan_desc
+                processed_matpel_ids.add(matpel.id)
+
+            if nilai_per_matpel_grouped[matpel_id_str]['id'] is None:
+                nilai_per_matpel_grouped[matpel_id_str]['id'] = matpel_id_str
+                nilai_per_matpel_grouped[matpel_id_str]['nama'] = matpel.nama
+                nilai_per_matpel_grouped[matpel_id_str]['kategori'] = matpel.get_kategoriMatpel_display()
+                nilai_per_matpel_grouped[matpel_id_str]['kode'] = matpel.kode
+
+            grade_entry = {
+                'komponen': komponen.namaKomponen,
+                'bobot': komponen.bobotKomponen,
+                'nilai': float(nilai_record.nilai) if nilai_record.nilai is not None else None
+            }
+            if komponen.tipeKomponen == 'Pengetahuan':
+                nilai_per_matpel_grouped[matpel_id_str]['pengetahuan'].append(grade_entry)
+            elif komponen.tipeKomponen == 'Keterampilan':
+                nilai_per_matpel_grouped[matpel_id_str]['keterampilan'].append(grade_entry)
+
+        # --- Hitung rata-rata ---
+        final_result_list = []
+        for subject_data in nilai_per_matpel_grouped.values():
+            rata_rata_p = calculate_weighted_average(subject_data['pengetahuan'])
+            rata_rata_k = calculate_weighted_average(subject_data['keterampilan'])
+            subject_data['rata_rata_pengetahuan'] = float(rata_rata_p) if rata_rata_p is not None else None
+            subject_data['rata_rata_keterampilan'] = float(rata_rata_k) if rata_rata_k is not None else None
+            final_result_list.append(subject_data)
+
+        response_data = {
+            "siswa_info": {
+                "id": str(user.id),
+                "username": user.username,
+                "nisn": student.nisn if student.nisn else "N/A",
+                "nama": student.name or user.username
+            },
+            "kelas": {
+                "nama": kelas.namaKelas,
+                "wali_kelas": kelas.waliKelas.name if kelas.waliKelas else None,
+                "wali_kelas_nisp": kelas.waliKelas.nisp if kelas.waliKelas else "N/A",
+                "tahun_ajaran": str(kelas.tahunAjaran),
+                "angkatan": kelas.angkatan
+            },
+            "nilai_siswa": final_result_list
+        }
+        return Response(response_data, status=200)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return Response({"message": "Terjadi kesalahan internal.", "error": True, "detail": str(e)}, status=500)

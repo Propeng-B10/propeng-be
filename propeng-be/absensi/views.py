@@ -1170,3 +1170,53 @@ def get_yearly_attendance_summary(request, kelas_id):
     except Exception as e:
         import traceback; traceback.print_exc()
         return JsonResponse({"status":500,"errorMessage":f"Internal error: {e}"},status=500)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsStudentRole])
+def get_student_attendance_summary_by_class(request, kelas_id):
+    """
+    Mirip get_student_attendance_summary, tapi berdasarkan kelas tertentu (bukan kelas aktif saja)
+    """
+    try:
+        user = request.user
+        student = Student.objects.select_related('user').get(user=user)
+        if not student.isActive or student.isDeleted:
+            return Response({"message": "Profil siswa tidak aktif.", "error": True}, status=403)
+
+        try:
+            kelas = Kelas.objects.get(id=kelas_id, siswa=student)
+        except Kelas.DoesNotExist:
+            return Response({"message": "Kelas tidak ditemukan atau Anda tidak terdaftar di kelas ini.", "error": True}, status=404)
+
+        absensi_query = AbsensiHarian.objects.filter(kelas=kelas).order_by('date')
+        attendance_summary = defaultdict(int)
+        possible_statuses = ['Hadir', 'Izin', 'Sakit', 'Alfa']
+        student_id_str = str(student.user_id)
+
+        for record in absensi_query:
+            student_data = record.listSiswa.get(student_id_str)
+            if student_data:
+                status_siswa = student_data.get('status') if isinstance(student_data, dict) else student_data
+                if status_siswa in possible_statuses:
+                    attendance_summary[status_siswa] += 1
+
+        summary_data = {status: attendance_summary[status] for status in possible_statuses}
+        response_payload = {
+            "status": 200,
+            "message": "Rekap kehadiran berhasil diambil.",
+            "kelas": kelas.namaKelas,
+            "siswa": student.name or student.user.username,
+            "periode": {
+                "start_date": absensi_query.first().date.strftime('%Y-%m-%d') if absensi_query.exists() else "Tidak ada data",
+                "end_date": absensi_query.last().date.strftime('%Y-%m-%d') if absensi_query.exists() else "Tidak ada data"
+            },
+            "rekap_kehadiran": summary_data
+        }
+        return Response(response_payload, status=200)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return Response({
+            "message": "Terjadi kesalahan internal saat mengambil rekap kehadiran.",
+            "error": True,
+            "detail": str(e)
+        }, status=500)
