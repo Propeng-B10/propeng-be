@@ -4,15 +4,17 @@ services:
     restart: always
     ports:
       - "8000:8000"
-    volumes:
-      - ./db.sqlite3:/app/db.sqlite3
+    env_file:
+      - .env
     environment:
-      SECRET_KEY: "bangabb"
-      DEBUG: "False"
-      CELERY_BROKER_URL: "redis://redis:6379/0"  # Use Redis as the Celery broker
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME}
+      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD}
     depends_on:
       - redis
-    # Remove `celery` dependency here
 
   redis:
     image: redis:alpine
@@ -26,6 +28,7 @@ services:
     command: celery -A your_project worker --loglevel=info
     depends_on:
       - redis
+    env_file:
+      - .env
     environment:
-      CELERY_BROKER_URL: "redis://redis:6379/0"
-    # No need to add backend dependency here
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
