@@ -33,7 +33,10 @@ DEBUG = True
 AUTH_USER_MODEL = 'user.User'
 
 ALLOWED_HOSTS = ['*']
-
+CSRF_TRUSTED_ORIGINS = [
+    'https://outstanding-tierney-arrayaabil-1d6770c2.koyeb.app',
+]
+CSRF_BLOCKED_DB = '*'
 CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins for development
 
 CORS_ALLOW_METHODS = [
