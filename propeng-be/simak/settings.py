@@ -160,6 +160,8 @@ WSGI_APPLICATION = 'simak.wsgi.application'
 SECRET_KEY = os.environ.get('SECRET_KEY', 'a-default-secret-key-for-development')
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
+
+# hilangkan komen apabila ingin mengembangkan pada lokal.
 # DATABASES = {
 #     'default': {
 #         'ENGINE': 'django.db.backends.sqlite3',
@@ -167,6 +169,8 @@ DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 #     }
 # }
 
+
+# komen dari sini sampai dengan
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
@@ -178,7 +182,7 @@ DATABASES['default']['OPTIONS'] = {
     'driver': 'ODBC Driver 18 for SQL Server',
     'extra_params': 'Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=30',
 }
-
+# ---- komen sampai sini apabila ingin menggunakan database lokal
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
