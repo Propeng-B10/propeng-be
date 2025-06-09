@@ -160,6 +160,13 @@ WSGI_APPLICATION = 'simak.wsgi.application'
 SECRET_KEY = os.environ.get('SECRET_KEY', 'a-default-secret-key-for-development')
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
