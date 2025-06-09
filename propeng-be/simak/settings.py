@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/5.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
+import os
 from pathlib import Path
 import user
 import nilai
@@ -17,10 +18,11 @@ import evalguru
 import absensi
 import matapelajaran
 import pengajuan_peminatan
-
+import dj_database_url
+from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+load_dotenv()
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -35,6 +37,7 @@ AUTH_USER_MODEL = 'user.User'
 ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = [
     'https://outstanding-tierney-arrayaabil-1d6770c2.koyeb.app',
+    'https://simakanglo-drffdpgkhyffgyfw.northeurope-01.azurewebsites.net'
 ]
 CSRF_BLOCKED_DB = '*'
 CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins for development
@@ -119,6 +122,20 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'simak.urls'
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO', # Change to DEBUG for more verbosity if needed
+    },
+}
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -140,13 +157,30 @@ WSGI_APPLICATION = 'simak.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-9v1p%@j)xl2d3%g(vr4hrfa0$_rbnchntb!4guwg%r#-l8gwt*')
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+
+pilihan_database = os.environ.get('DATABASE_PILIHAN', 'lokal')
+
+if pilihan_database == 'non-lokal':
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.environ.get('DATABASE_URL'),
+            engine='mssql'
+        )
+    }
+
+    DATABASES['default']['OPTIONS'] = {
+        'driver': 'ODBC Driver 18 for SQL Server',
+        'extra_params': 'Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=30',
+    }
 
 
 # Password validation
