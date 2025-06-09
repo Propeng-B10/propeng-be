@@ -157,32 +157,31 @@ WSGI_APPLICATION = 'simak.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-SECRET_KEY = os.environ.get('SECRET_KEY', 'a-default-secret-key-for-development')
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-9v1p%@j)xl2d3%g(vr4hrfa0$_rbnchntb!4guwg%r#-l8gwt*')
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-
-# hilangkan komen apabila ingin mengembangkan pada lokal.
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
-
-
-# komen dari sini sampai dengan
 DATABASES = {
-    'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL'),
-        engine='mssql'
-    )
-}
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
-DATABASES['default']['OPTIONS'] = {
-    'driver': 'ODBC Driver 18 for SQL Server',
-    'extra_params': 'Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=30',
-}
-# ---- komen sampai sini apabila ingin menggunakan database lokal
+pilihan_database = os.environ.get('DATABASE_PILIHAN', 'lokal')
+
+if pilihan_database == 'non-lokal':
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.environ.get('DATABASE_URL'),
+            engine='mssql'
+        )
+    }
+
+    DATABASES['default']['OPTIONS'] = {
+        'driver': 'ODBC Driver 18 for SQL Server',
+        'extra_params': 'Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=30',
+    }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
