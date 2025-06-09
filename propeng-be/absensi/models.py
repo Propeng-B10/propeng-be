@@ -6,7 +6,7 @@ import string
 import random
 
 class AbsensiHarian(models.Model):
-    kode = models.CharField('kel',null=True, unique=True, max_length=6)
+    kode = models.CharField('kel',null=True, unique=True, max_length=8) #changing this ngikutin kode kelas
     date = models.DateField()
     kelas = models.ForeignKey('kelas.Kelas', related_name="absen_kelas", on_delete=models.CASCADE)
     listSiswa = models.JSONField(default=dict)
